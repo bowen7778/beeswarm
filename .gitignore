@@ -19,6 +19,7 @@ Thumbs.db
 .trae/
 .beemcp-runtime/
 releases/
+scripts/
 .tmp-regression-tests/
 tests/
 ui/tests/
