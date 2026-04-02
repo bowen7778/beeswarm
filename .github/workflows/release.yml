@@ -1,4 +1,4 @@
-name: Release BeeMCP Kernel
+name: Release BeeSwarm Kernel
 
 on:
   push:
@@ -86,20 +86,20 @@ jobs:
             "releaseDate": "${RELEASE_DATE}",
             "url": "https://github.com/${GITHUB_REPOSITORY}/releases/download/${RELEASE_TAG}/kernel.tar.gz",
             "sha256": "${SHA256}",
-            "releaseNotes": "BeeMCP Kernel ${RELEASE_TAG} released."
+            "releaseNotes": "BeeSwarm Kernel ${RELEASE_TAG} released."
           }
           JSON
 
       - name: Sign Release Bundle
         env:
-          BEEMCP_UPDATE_PRIV_KEY: ${{ secrets.BEEMCP_UPDATE_PRIV_KEY }}
+          BEESWARM_UPDATE_PRIV_KEY: ${{ secrets.BEESWARM_UPDATE_PRIV_KEY }}
         run: |
-          if [ -n "$BEEMCP_UPDATE_PRIV_KEY" ]; then
+          if [ -n "$BEESWARM_UPDATE_PRIV_KEY" ]; then
             node -e "
               const { sign } = require('node:crypto');
               const fs = require('node:fs');
               const bundleBuffer = fs.readFileSync('releases/kernel.tar.gz');
-              const privateKey = process.env.BEEMCP_UPDATE_PRIV_KEY;
+              const privateKey = process.env.BEESWARM_UPDATE_PRIV_KEY;
               const signature = sign(null, bundleBuffer, privateKey);
               const signatureB64 = signature.toString('base64');
               const metadata = JSON.parse(fs.readFileSync('releases/latest.json', 'utf8'));
@@ -108,7 +108,7 @@ jobs:
               console.log('Bundle signed successfully.');
             "
           else
-            echo "Warning: BEEMCP_UPDATE_PRIV_KEY not set, skipping signature."
+            echo "Warning: BEESWARM_UPDATE_PRIV_KEY not set, skipping signature."
           fi
 
       - name: Create Release

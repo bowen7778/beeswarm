@@ -1,4 +1,4 @@
-name: BeeMCP CI # Updated fix for TS errors
+name: BeeSwarm CI # Updated branding to BeeSwarm
 
 on:
   push:

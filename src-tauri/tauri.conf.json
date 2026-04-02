@@ -1,11 +1,11 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "beemcp",
+  "productName": "beeswarm",
   "version": "1.0.0",
-  "identifier": "com.beemcp.app",
+  "identifier": "com.beeswarm.app",
   "build": {
     "beforeDevCommand": "",
-    "beforeBuildCommand": "npm run build",
+    "beforeBuildCommand": "pnpm run build",
     "devUrl": "http://localhost:5173",
     "frontendDist": "../build/ui"
   },
@@ -13,7 +13,7 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "title": "BeeMCP",
+        "title": "BeeSwarm",
         "width": 1280,
         "height": 850,
         "resizable": true,

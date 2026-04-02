@@ -1,10 +1,10 @@
 [package]
-name = "app"
+name = "beeswarm"
 version = "1.0.0"
-description = "BeeMCP Desktop App"
-authors = ["BeeMCP Team"]
+description = "BeeSwarm Desktop App"
+authors = ["BeeSwarm Team"]
 license = "MIT"
-repository = "https://github.com/beemcp/beemcp"
+repository = "https://github.com/bowen7778/beeswarm"
 edition = "2021"
 rust-version = "1.77.2"
 

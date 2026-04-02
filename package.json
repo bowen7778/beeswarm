@@ -1,8 +1,8 @@
 {
-  "name": "beemcp-server",
+  "name": "beeswarm-server",
   "version": "1.0.0",
-  "description": "BeeMCP Model Context Protocol Server",
-  "author": "BeeMCP Team",
+  "description": "BeeSwarm Model Context Protocol Server",
+  "author": "BeeSwarm Team",
   "license": "MIT",
   "repository": {
     "type": "git",

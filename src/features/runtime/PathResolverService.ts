@@ -18,8 +18,8 @@ export class PathResolverService {
   }
 
   private resolveProgramRoot(): string {
-    const isSidecar = process.env.BEEMCP_IS_SIDECAR === "1";
-    const envRoot = String(process.env.BEEMCP_PROGRAM_ROOT || "").trim();
+    const isSidecar = process.env.BEESWARM_IS_SIDECAR === "1";
+    const envRoot = String(process.env.BEESWARM_PROGRAM_ROOT || "").trim();
     if (envRoot) return path.resolve(envRoot);
 
     // In development environment, if not in Sidecar mode, we need to resolve from the code path
@@ -44,18 +44,18 @@ export class PathResolverService {
   }
 
   private resolveUserDataRoot(): string {
-    const envData = String(process.env.BEEMCP_USER_DATA_DIR || "").trim();
+    const envData = String(process.env.BEESWARM_USER_DATA_DIR || "").trim();
     if (envData) return path.resolve(envData);
 
     // 2. Check if local runtime directory exists (Portable Mode / Sandbox Friendly)
-    const localRuntime = path.join(this.programRoot, ".beemcp-runtime");
+    const localRuntime = path.join(this.programRoot, ".beeswarm-runtime");
     const fsSync = require("node:fs");
     if (fsSync.existsSync(localRuntime)) {
       return localRuntime;
     }
 
     // 3. Standard system directory
-    const appName = "beemcp";
+    const appName = "beeswarm";
     const platform = process.platform;
     let standardPath = "";
 
@@ -93,15 +93,15 @@ export class PathResolverService {
   }
 
   get workspaceRoot(): string {
-    return path.resolve(process.env.BEEMCP_PROJECT_ROOT || process.cwd());
+    return path.resolve(process.env.BEESWARM_PROJECT_ROOT || process.cwd());
   }
 
-  get beemcpDir(): string {
+  get beeswarmDir(): string {
     return path.join(this._userDataRoot, "system");
   }
 
   get systemDir(): string {
-    return this.beemcpDir;
+    return this.beeswarmDir;
   }
 
   /**
@@ -116,7 +116,7 @@ export class PathResolverService {
   }
 
   get hostConfigFile(): string {
-    const raw = String(process.env.BEEMCP_HOST_CONFIG_FILE || "").trim();
+    const raw = String(process.env.BEESWARM_HOST_CONFIG_FILE || "").trim();
     if (raw) return path.resolve(raw);
     return path.join(this.getGlobalConfigDir(), "host.config.json");
   }
@@ -149,7 +149,7 @@ export class PathResolverService {
   }
 
   /**
-   * Get project-specific .beemcp directory (project config and data strictly follow physical project path)
+   * Get project-specific .beeswarm directory (project config and data strictly follow physical project path)
    */
   getProjectDataDir(projectRoot: string): string {
     const root = String(projectRoot || "").trim();
@@ -167,7 +167,7 @@ export class PathResolverService {
       throw new Error("FATAL: CANNOT_USE_SYSTEM_ROOT_AS_PROJECT_CONTEXT");
     }
 
-    return path.join(resolvedRoot, ".beemcp");
+    return path.join(resolvedRoot, ".beeswarm");
   }
 
   /**

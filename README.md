@@ -1,4 +1,4 @@
-# BeeMCP Kernel
+# BeeSwarm Kernel
 
 基于 Model Context Protocol (MCP) 的工业级服务端核心。
 

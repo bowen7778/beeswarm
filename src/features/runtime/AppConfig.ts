@@ -27,12 +27,12 @@ export class AppConfig {
   private config: HostConfig;
 
   static projectRoot(): string {
-    const envRoot = String(process.env.BEEMCP_PROJECT_ROOT || "").trim();
+    const envRoot = String(process.env.BEESWARM_PROJECT_ROOT || "").trim();
     return envRoot ? path.resolve(envRoot) : "";
   }
 
   static programRoot(): string {
-    const envRoot = String(process.env.BEEMCP_PROGRAM_ROOT || "").trim();
+    const envRoot = String(process.env.BEESWARM_PROGRAM_ROOT || "").trim();
     if (envRoot) return path.resolve(envRoot);
 
     const entry = String(process.argv[1] || "").trim();

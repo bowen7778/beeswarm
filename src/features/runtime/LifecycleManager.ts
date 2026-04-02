@@ -43,7 +43,7 @@ export class LifecycleManager {
   async boot(): Promise<void> {
     if (this.isBooted) return;
 
-    this.logger.info("SYSTEM", "Booting BeeMCP Server...");
+    this.logger.info("SYSTEM", "Booting BeeSwarm Server...");
 
     try {
       // 1. Singleton Lock / Attach
@@ -56,7 +56,7 @@ export class LifecycleManager {
           const activePid = err.message.split(":")[1];
           // If already running and we are in Stdio mode, switch to Attach Mode and continue.
           // Otherwise (e.g. double-clicking desktop app), exit.
-          const isStdio = !process.stdin.isTTY || process.env.BEEMCP_ATTACH_MODE === '1';
+          const isStdio = !process.stdin.isTTY || process.env.BEESWARM_ATTACH_MODE === '1';
           if (isStdio) {
             isMaster = false;
             this.logger.info("SYSTEM", `Host already running (PID: ${activePid}). Entering Attach Mode.`);
@@ -86,7 +86,7 @@ export class LifecycleManager {
 
         // Dynamic port negotiation
         let finalPort = this.config.uiPort;
-        if (process.env.BEEMCP_IS_DEV === '1') {
+        if (process.env.BEESWARM_IS_DEV === '1') {
           this.logger.info("SYSTEM", `Dev mode: Attempting to use fixed port ${finalPort}`);
         }
         finalPort = await this.portOwnership.findAvailablePort(finalPort);
