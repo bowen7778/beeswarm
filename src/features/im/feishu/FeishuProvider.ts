@@ -5,6 +5,7 @@ import { LoggerService } from "../../runtime/LoggerService.js";
 import { SecretService } from "../../runtime/SecretService.js";
 import { SYMBOLS } from "../../../common/di/symbols.js";
 import { IMConfigService } from "../services/IMConfigService.js";
+import { IMBindingService } from "../services/IMBindingService.js";
 import { IMAdminCaptureService } from "../services/IMAdminCaptureService.js";
 import { IMRuntimeStore } from "../stores/IMRuntimeStore.js";
 import { MessageCoreService } from "../../mcp/message/MessageCoreService.js";

@@ -120,7 +120,7 @@ export class MessageOutboxService {
    */
   private async processEntry(entry: any): Promise<void> {
     try {
-      const routing = new RoutingKernelService(this.manager);
+      const routing = new RoutingKernelService(this.manager, this.logger);
       const activeProviders = this.pluginRegistry.listAll();
       const config = await this.imService.readConfig();
       let sentCount = 0;

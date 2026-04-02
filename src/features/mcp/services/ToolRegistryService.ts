@@ -178,6 +178,7 @@ export class ToolRegistryService {
             }]);
           });
 
+          let stopListening: (() => void) | null = null;
           const onReply = (payload: any) => {
             if (payload.conversationId === projectId) {
               isResolved = true;
@@ -187,11 +188,11 @@ export class ToolRegistryService {
           };
 
           const cleanup = () => {
-            this.events.off("message:user_input", onReply);
+            if (stopListening) stopListening();
             ActiveKernelRegistry.unregister(projectId!);
           };
 
-          this.events.onUserInput(onReply);
+          stopListening = this.events.onUserInput(onReply);
         });
 
         return { content: results };
