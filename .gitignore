@@ -17,7 +17,6 @@ Thumbs.db
 
 # Project specific
 .trae/
-.github/
 .beemcp-runtime/
 .tmp-regression-tests/
 tests/

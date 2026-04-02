@@ -1,0 +1,42 @@
+name: BeeMCP CI
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Atomic Lint
+        run: npm run lint:atomic
+
+      - name: API Contract Lint
+        run: npm run lint:api:contract
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: UI Lint
+        run: npm run lint:ui
+
+      - name: Regression Tests
+        run: npm run test:regression
+
+      - name: UI Tests
+        run: npm run test:ui

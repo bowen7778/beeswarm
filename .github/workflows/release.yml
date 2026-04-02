@@ -1,0 +1,93 @@
+name: Release BeeMCP Kernel
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Quality Gates
+        run: |
+          npm run lint:atomic
+          npm run typecheck
+          npm run test:regression
+
+      - name: Build Kernel and UI
+        run: npm run build
+
+      - name: Create Kernel Bundle
+        id: bundle
+        run: |
+          rm -rf releases/temp
+          mkdir -p releases/temp/dist
+          cp -r build/dist/. releases/temp/dist/
+          cp manifest.json releases/temp/manifest.json
+          tar -czf kernel.tar.gz -C releases/temp .
+          mv kernel.tar.gz releases/
+          SHA256=$(sha256sum releases/kernel.tar.gz | awk '{print $1}')
+          RELEASE_DATE=$(node -p "JSON.parse(require('fs').readFileSync('manifest.json','utf8')).releaseDate || new Date().toISOString().split('T')[0]")
+          MANIFEST_VERSION=$(node -p "JSON.parse(require('fs').readFileSync('manifest.json','utf8')).version || '0.0.0'")
+          CHANNEL="baseline"
+          RELEASE_TAG="baseline"
+          VERSION="${MANIFEST_VERSION}.${GITHUB_RUN_NUMBER}"
+          if [[ "${GITHUB_REF_TYPE}" == "tag" && "${GITHUB_REF_NAME}" == v* ]]; then
+            CHANNEL="stable"
+            RELEASE_TAG="${GITHUB_REF_NAME}"
+            VERSION="${GITHUB_REF_NAME#v}"
+          fi
+          echo "channel=${CHANNEL}" >> $GITHUB_OUTPUT
+          echo "release_tag=${RELEASE_TAG}" >> $GITHUB_OUTPUT
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          cat > releases/latest.json <<JSON
+          {
+            "version": "${VERSION}",
+            "releaseDate": "${RELEASE_DATE}",
+            "url": "https://github.com/${GITHUB_REPOSITORY}/releases/download/${RELEASE_TAG}/kernel.tar.gz",
+            "sha256": "${SHA256}",
+            "releaseNotes": "BeeMCP Kernel ${RELEASE_TAG} released."
+          }
+          JSON
+
+      - name: Create Release
+        id: create_release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            releases/kernel.tar.gz
+            releases/latest.json
+          tag_name: ${{ steps.bundle.outputs.release_tag }}
+          target_commitish: ${{ github.sha }}
+          name: BeeMCP Kernel ${{ steps.bundle.outputs.release_tag }}
+          body: |
+            channel: ${{ steps.bundle.outputs.channel }}
+            version: ${{ steps.bundle.outputs.version }}
+            source_ref: ${{ github.ref }}
+          make_latest: ${{ steps.bundle.outputs.channel == 'stable' }}
+          append_body: true
+          allow_updates: true
+          draft: false
+          prerelease: ${{ steps.bundle.outputs.channel != 'stable' }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
