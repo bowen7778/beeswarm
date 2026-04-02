@@ -5,7 +5,7 @@
   "description": "BeeSwarm Kernel",
   "protocols": {
     "mcpServer": "1.2.2",
-    "gateway": "5.0.0",
+    "gateway": "1.0.0",
     "beeswarm": "1.0.0"
   },
   "runtime": {
