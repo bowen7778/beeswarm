@@ -15,30 +15,13 @@ src-tauri/target/
 .DS_Store
 Thumbs.db
 
-# Project specific
+# Engineering & Local Tools (Ignored)
 .trae/
 .beemcp-runtime/
 releases/
 scripts/
-.tmp-regression-tests/
 tests/
-ui/tests/
-scripts/sync.mjs
-scripts/temp-*
-scripts/push-*
-scripts/isogit-*
-scripts/final-*
-scripts/robust-*
-scripts/spawn-*
-scripts/git-diagnostics.mjs
-scripts/js-sync.mjs
-scripts/optimized-sync.mjs
-scripts/push-token-file.mjs
-scripts/push-verbose.mjs
-scripts/robust-push.mjs
-scripts/spawn-push.mjs
-scripts/push-release.mjs
-scripts/download-git*
+atomic-lint.config.json
 
 # File types to ignore (Security and Repository Size)
 *.log
@@ -51,6 +34,7 @@ scripts/download-git*
 !README.md
 !manifest.json
 !package.json
+!pnpm-lock.yaml
 !tsconfig*.json
 !tsup.config.ts
 !vite.config.js
