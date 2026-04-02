@@ -59,9 +59,12 @@ jobs:
         run: |
           rm -rf releases/temp
           mkdir -p releases/temp/dist
+          mkdir -p releases/temp/ui
           cp -r build/dist/. releases/temp/dist/
+          cp -r build/ui/. releases/temp/ui/
           cp manifest.json releases/temp/manifest.json
           tar -czf kernel.tar.gz -C releases/temp .
+          mkdir -p releases
           mv kernel.tar.gz releases/
           SHA256=$(sha256sum releases/kernel.tar.gz | awk '{print $1}')
           RELEASE_DATE=$(node -p "JSON.parse(require('fs').readFileSync('manifest.json','utf8')).releaseDate || new Date().toISOString().split('T')[0]")

@@ -13,7 +13,7 @@
   "scripts": {
     "build:server": "tsup src/startup/cli.ts",
     "build:ui": "node -e \"const fs=require('fs'); fs.rmSync('build/ui', {recursive:true, force:true}); fs.mkdirSync('build/ui', {recursive:true}); fs.cpSync('ui', 'build/ui', {recursive:true});\"",
-    "build": "tsup && npm run build:ui",
+    "build": "pnpm run build:server && pnpm run build:ui",
     "typecheck": "npx tsc -p tsconfig.json --noEmit --pretty false",
     "start": "node build/dist/cli.cjs",
     "dev": "node scripts/release.mjs --sync-only && node scripts/dev.mjs",
