@@ -34,6 +34,7 @@ export class FeishuProvider implements IMProvider {
     @inject(SYMBOLS.ProjectStore) private readonly projectStore: ProjectStore,
     @inject(IMConfigService) private readonly configService: IMConfigService,
     @inject(SYMBOLS.IMAdminCaptureService) private readonly adminCaptureService: IMAdminCaptureService,
+    @inject(SYMBOLS.IMBindingService) private readonly imService: IMBindingService,
     @inject(IMRuntimeStore) private readonly runtimeStore: IMRuntimeStore,
     @inject(SYMBOLS.UsecaseBus) private readonly bus: UsecaseBus,
     @inject(SYMBOLS.SessionApplicationService) private readonly sessionAppService: SessionApplicationService

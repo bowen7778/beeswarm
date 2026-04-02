@@ -55,10 +55,7 @@ export class HubSchemaInitializer extends BaseRepository {
     const version = this.readSchemaVersion();
     if (version < this.schemaVersion) {
       this.logger.info(`[HubSchemaInitializer] Schema version upgrade (${version} -> ${this.schemaVersion}). Performing incremental updates.`);
-      this.initTables();
       this.writeSchemaVersion(this.schemaVersion);
-      return;
     }
-    this.ensureProjectColumns();
   }
 }

@@ -30,7 +30,7 @@ export class MonitorController extends BaseController {
     @inject(SYMBOLS.PathResolverService) private readonly pathResolver: PathResolverService,
     @inject(SYMBOLS.MessageOutboxService) private readonly outbox: MessageOutboxService,
     @inject(SYMBOLS.IMPluginRegistry) private readonly pluginRegistry: IMPluginRegistry,
-    @inject(SYMBOLS.LoggerService) private readonly logger: LoggerService,
+    @inject(SYMBOLS.LoggerService) protected readonly logger: LoggerService,
     @inject(SYMBOLS.ConversationQueryService) private readonly queryService: ConversationQueryService,
     @inject(SYMBOLS.ProjectIdentityService) private readonly projectIdentity: ProjectIdentityService
   ) {

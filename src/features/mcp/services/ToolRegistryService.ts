@@ -187,7 +187,7 @@ export class ToolRegistryService {
           };
 
           const cleanup = () => {
-            this.events.offUserInput(onReply);
+            this.events.off("message:user_input", onReply);
             ActiveKernelRegistry.unregister(projectId!);
           };
 

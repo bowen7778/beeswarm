@@ -20,7 +20,7 @@ export class SessionController extends BaseController {
     @inject(SYMBOLS.SessionApplicationService) private readonly sessionService: SessionApplicationService,
     @inject(SYMBOLS.ConversationQueryService) private readonly queryService: ConversationQueryService,
     @inject(SYMBOLS.MessageCoreService) private readonly messageCore: MessageCoreService,
-    @inject(SYMBOLS.LoggerService) private readonly logger: LoggerService,
+    @inject(SYMBOLS.LoggerService) protected readonly logger: LoggerService,
     @inject(SYMBOLS.UsecaseBus) private readonly bus: UsecaseBus
   ) {
     super(projectContext, logger);

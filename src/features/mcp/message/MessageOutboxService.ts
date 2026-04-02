@@ -175,7 +175,7 @@ export class MessageOutboxService {
             chatId,
             kind: entry.kind, // Pass message kind (text/interactive)
             projectId: entry.conversation_id 
-          });
+          } as any);
           sentCount++;
           
           // If group self-healing occurred during send (new group created), sync route and binding
