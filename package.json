@@ -1,6 +1,6 @@
 {
   "name": "beemcp-server",
-  "version": "1.0.0",
+  "version": "1.0.3",
   "description": "BeeMCP Model Context Protocol Server",
   "author": "BeeMCP Team",
   "license": "MIT",
