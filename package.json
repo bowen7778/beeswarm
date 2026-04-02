@@ -1,0 +1,58 @@
+{
+  "name": "beemcp-server",
+  "version": "1.0.0",
+  "description": "BeeMCP Model Context Protocol Server",
+  "author": "BeeMCP Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/bowen7778/beeswarm"
+  },
+  "type": "module",
+  "main": "build/dist/cli.cjs",
+  "scripts": {
+    "version:sync": "node scripts/release.mjs --sync-only",
+    "build:server": "tsup src/startup/cli.ts",
+    "build:ui": "npm run lint:ui && node scripts/build-ui.mjs",
+    "sidecar:setup": "node scripts/setup-sidecar.mjs",
+    "prebuild": "node -e \"if (require('fs').existsSync('./dist')) { console.error('Error: Local dist directory detected! Clean it first.'); process.exit(1); }\"",
+    "build": "npm run version:sync && npm run sidecar:setup && tsup && node scripts/build-ui.mjs",
+    "lint:atomic": "node scripts/lint-atomic.mjs",
+    "lint:api:contract": "node scripts/lint-api-contract.mjs",
+    "lint:ui": "pnpm run lint:ui:contract && pnpm run lint:ui:i18n",
+    "lint:ui:contract": "node scripts/lint-ui-contract.mjs",
+    "lint:ui:i18n": "node scripts/lint-ui-i18n.mjs",
+    "test:ui": "node scripts/test-ui.mjs",
+    "test:regression": "npx tsc -p tsconfig.regression.json --pretty false && node --test .tmp-regression-tests/tests/regression/*.test.js",
+    "typecheck": "npx tsc -p tsconfig.json --noEmit --pretty false",
+    "start": "node build/dist/cli.cjs",
+    "dev": "pnpm run version:sync && node scripts/dev.mjs",
+    "dev:doctor": "node scripts/dev-doctor.mjs",
+    "dev:doctor:probe": "node scripts/dev-doctor.mjs --probe",
+    "dev:doctor:probe:log": "node scripts/dev-doctor.mjs --probe --probe-log --probe-ms=10000",
+    "release": "pnpm run version:sync && node scripts/release.mjs",
+    "release:push": "pnpm run version:sync && node scripts/release.mjs --push",
+    "sync": "node scripts/sync.mjs",
+    "clean": "node -e \"const {execSync}=require('child_process'); const fs=require('fs'); const path=require('path'); try{execSync('taskkill /F /IM app.exe /T',{stdio:'ignore'});}catch(e){} try{execSync('wmic process where \\\"commandline like '%cli.cjs%'\\\" delete',{stdio:'ignore'});}catch(e){} const roots=[process.cwd()]; const rel=['../build','./build','./dist','./src-tauri/target']; for(const r of roots){ for(const p of rel){ try { fs.rmSync(path.resolve(r,p),{recursive:true,force:true}); } catch(e){} } }\""
+  },
+  "dependencies": {
+    "@larksuiteoapi/node-sdk": "^1.60.0",
+    "@modelcontextprotocol/sdk": "^1.5.0",
+    "express": "^4.21.2",
+    "inversify": "^6.2.2",
+    "reflect-metadata": "^0.2.2",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@swc/core": "^1.15.21",
+    "@tauri-apps/api": "^2.10.1",
+    "@tauri-apps/cli": "^2.10.1",
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.13.4",
+    "git-push": "^0.1.1",
+    "isomorphic-git": "^1.37.4",
+    "tsup": "^8.5.1",
+    "typescript": "^5.7.3",
+    "vite": "^8.0.3"
+  }
+}

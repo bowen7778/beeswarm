@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title data-i18n="app.title">BeeMCP Nebula | Orchestrator Control</title>
+  
+  <!-- External Icons (FontAwesome) - Handled as compliance exception for now or replaced if build fails -->
+  <!-- Note: build-ui.mjs might fail if this is still here. Let's use standard icons if needed. -->
+  
+  <link rel="stylesheet" href="./assets/styles/nebula.css">
+</head>
+<body>
+
+  <!-- Left: Hub -->
+  <aside class="hub">
+    <div class="hub-header">
+      <div class="hub-brand">
+        <h1 class="hub-title" data-i18n="hub.title">NEBULA</h1>
+        <span class="hub-status-indicator"></span>
+      </div>
+      <div class="hub-actions">
+        <button class="icon-btn" id="new-btn" data-i18n-title="hub.new"></button>
+      </div>
+    </div>
+
+    <div class="hub-scroll-area">
+      <div class="context-list" id="context-list">
+        <!-- Contexts or Empty state will go here -->
+      </div>
+    </div>
+
+    <div class="hub-footer">
+      <div class="lang-switch">
+        <button class="lang-btn" data-lang="zh-CN">ZH</button>
+        <button class="lang-btn" data-lang="en-US">EN</button>
+      </div>
+      <div class="hub-version" id="hub-version">v--</div>
+    </div>
+  </aside>
+
+  <!-- Center: Stage -->
+  <main class="stage">
+    <!-- Update Notification Banner -->
+    <div id="update-banner" class="update-banner hidden" aria-live="polite">
+      <div class="update-info">
+        <span class="update-icon">✨</span>
+        <span id="update-msg" class="update-msg" data-i18n="update.msg">New version available!</span>
+      </div>
+      <div class="update-actions">
+        <button id="update-btn" class="update-btn-action" data-i18n="update.action" aria-label="update action">Update Now</button>
+        <button id="update-ignore" class="update-btn-close" aria-label="close update banner">&times;</button>
+      </div>
+    </div>
+
+    <!-- Empty State View -->
+    <div id="stage-empty" class="stage-empty-view">
+      <h1 class="stage-welcome-title" data-i18n="stage.empty.title">开始你的智能编排</h1>
+      <p class="stage-welcome-desc" data-i18n="stage.empty.desc">选择一个左侧的项目，或者通过下方的快捷操作开始一个全新的项目。</p>
+      
+      <div class="stage-quick-actions">
+        <div class="action-card" id="quick-new-project">
+          <div class="action-card-icon" id="icon-quick-new"></div>
+          <div class="action-card-label" data-i18n="hub.new">新建项目</div>
+        </div>
+        <div class="action-card" id="quick-open-folder">
+          <div class="action-card-icon" id="icon-quick-open"></div>
+          <div class="action-card-label" data-i18n="stage.quick.open">打开本地目录</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Chat View -->
+    <div id="stage-chat" class="stage-chat-view hidden">
+      <header class="stage-header">
+        <div id="current-title" data-i18n="stage.welcome" style="font-weight: 700; font-size: 16px;">Select Orchestration Context</div>
+      </header>
+      
+      <div class="stage-content" id="chat-messages">
+        <!-- Messages -->
+      </div>
+
+      <div class="stage-input-area">
+        <div class="nebula-input-wrapper">
+          <button class="btn-icon" id="attach-btn" aria-label="attach"></button>
+          <textarea id="msg-input" data-i18n-placeholder="stage.input.placeholder" placeholder="Type command..." rows="1"></textarea>
+          <button class="btn-icon" id="send-btn" style="color: var(--nebula-accent);" aria-label="send"></button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Inspector (Right) -->
+    <aside class="inspector">
+      <!-- Configuration Section -->
+      <section class="inspector-section">
+        <div class="inspector-section-header">
+          <div class="inspector-section-title">
+            <span id="header-icon-config"></span>
+            <span data-i18n="inspector.title">全局配置</span>
+          </div>
+        </div>
+        
+        <div class="config-grid">
+          <!-- MCP Configuration Card -->
+          <div class="config-card" id="config-mcp">
+            <div class="config-icon" id="icon-mcp"></div>
+            <div class="card-content">
+              <div class="config-label" data-i18n="inspector.mcp.title">MCP配置</div>
+              <div class="status-wrapper">
+                <span class="card-status-badge" id="badge-mcp">---</span>
+                <span class="card-secondary-info" id="info-mcp"></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- IM Configuration Card -->
+          <div class="config-card" id="config-im">
+            <div class="config-icon" id="icon-im"></div>
+            <div class="card-content">
+              <div class="config-label" data-i18n="inspector.im.title">IM通讯</div>
+              <div class="status-wrapper">
+                <span class="card-status-badge" id="badge-im">---</span>
+                <span class="card-secondary-info" id="info-im"></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- System Configuration Card -->
+          <div class="config-card" id="config-system">
+            <div class="config-icon" id="icon-system"></div>
+            <div class="card-content">
+              <div class="config-label" data-i18n="inspector.system.title">系统配置</div>
+              <div class="status-wrapper">
+                <span class="card-status-badge status-ok" id="badge-system">OK</span>
+                <span class="card-secondary-info" id="info-system">v--</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Active Tools Section -->
+      <section class="inspector-section">
+        <div class="inspector-section-header">
+          <div class="inspector-section-title">
+            <span id="header-icon-tools"></span>
+            <span data-i18n="inspector.tools.title">活跃工具</span>
+          </div>
+          <div class="tool-count-badge" id="tool-count">0</div>
+        </div>
+        <div class="tools-list" id="tools-list">
+          <!-- Tools dynamically injected -->
+        </div>
+      </section>
+
+      <!-- Event Monitor Section -->
+      <section class="inspector-section monitor-panel">
+        <div class="inspector-section-header">
+          <div class="inspector-section-title">
+            <span id="header-icon-monitor"></span>
+            <span data-i18n="inspector.monitor.title">实时事件</span>
+          </div>
+        </div>
+        <div class="monitor-feed" id="monitor-feed" aria-live="polite">
+          <!-- Events dynamically injected -->
+        </div>
+      </section>
+    </aside>
+
+    <!-- Global Dialog (Alert/Confirm/Prompt replacement) -->
+    <div id="dialog-overlay" class="nebula-dialog-overlay hidden">
+      <div class="nebula-dialog-container" role="dialog" aria-modal="true" aria-labelledby="dialog-title">
+        <div class="nebula-dialog-header">
+          <div id="dialog-header-icon"></div>
+          <div class="nebula-dialog-title" id="dialog-title" data-i18n="dialog.notification">Notification</div>
+        </div>
+        <div class="nebula-dialog-body">
+          <p class="nebula-dialog-text" id="dialog-msg"></p>
+          <input type="text" class="nebula-dialog-input hidden" id="dialog-input" spellcheck="false" autocomplete="off">
+        </div>
+        <div class="nebula-dialog-footer">
+          <button class="nebula-dialog-btn cancel hidden" id="dialog-cancel-btn" data-i18n="common.cancel">Cancel</button>
+          <button class="nebula-dialog-btn confirm" id="dialog-confirm-btn" data-i18n="common.confirm">Confirm</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MCP Config Modal Overlay (Standardized Style) -->
+    <div id="mcp-modal-overlay" class="nebula-modal-overlay hidden">
+      <div class="nebula-modal-container" role="dialog" aria-modal="true">
+        <div class="nebula-modal-header">
+          <div class="nebula-modal-title">
+            <span id="modal-header-icon"></span>
+            <span data-i18n="modal.mcp.title">MCP 配置中心</span>
+          </div>
+          <button id="modal-close-btn" class="nebula-modal-close" aria-label="close mcp config">&times;</button>
+        </div>
+        
+        <div class="nebula-modal-body">
+          <!-- Stage 1: Client Snippets -->
+          <div class="nebula-modal-section nebula-form-section">
+            <div class="nebula-form-header">
+              <div class="nebula-modal-label" data-i18n="modal.mcp.client.title">1. 配置 AI 客户端 (Cursor / Claude / VSCode)</div>
+            </div>
+            <div class="snippet-grid">
+              <!-- SSE Card -->
+              <div class="snippet-card">
+                <div class="snippet-card-header">
+                  <span class="badge-recommend">RECOMMENDED</span>
+                  <span>SSE Mode</span>
+                </div>
+                <div class="code-block-wrapper">
+                  <pre class="code-block"><code id="code-snippet-sse">{}</code></pre>
+                  <button class="copy-btn" id="copy-sse-btn" data-i18n="modal.mcp.copy_sse">复制 SSE JSON</button>
+                </div>
+              </div>
+
+              <!-- Stdio Card -->
+              <div class="snippet-card">
+                <div class="snippet-card-header">
+                  <span>Stdio Mode</span>
+                </div>
+                <div class="code-block-wrapper">
+                  <pre class="code-block"><code id="code-snippet-stdio">{}</code></pre>
+                  <button class="copy-btn" id="copy-stdio-btn" data-i18n="modal.mcp.copy_stdio">复制 Stdio JSON</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Stage 2: Interaction Commands -->
+          <div class="nebula-modal-section nebula-form-section">
+            <div class="nebula-form-header">
+              <div class="nebula-modal-label" data-i18n="modal.mcp.runtime.title">2. 激活并开始交互</div>
+            </div>
+            <div class="code-block-wrapper">
+              <div class="code-block-header">
+                <span>AI Interaction Commands</span>
+              </div>
+              <pre class="code-block"><code>beemcp_init</code></pre>
+              <div class="code-block-desc" data-i18n="modal.mcp.runtime.init_desc">建立首次连接后，必须让 AI 执行此指令初始化上下文并同步回复</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- IM Config Modal Overlay (Standardized Plugin Hub) -->
+    <div id="im-modal-overlay" class="nebula-modal-overlay hidden">
+      <div class="nebula-modal-container" role="dialog" aria-modal="true">
+        <div class="nebula-modal-header">
+          <div class="nebula-modal-title">
+            <span id="im-modal-header-icon"></span>
+            <span id="im-modal-title-text" data-i18n="modal.im.title">IM 插件中心</span>
+          </div>
+          <button id="im-modal-close-btn" class="nebula-modal-close" aria-label="close im config">&times;</button>
+        </div>
+        
+        <div class="nebula-modal-body">
+          <!-- View 1: Plugin Hub (List) -->
+          <div id="im-view-hub" class="im-view nebula-form-section">
+            <div class="nebula-form-header">
+              <div class="nebula-modal-label" data-i18n="modal.im.hub.label">可用插件</div>
+            </div>
+            <div class="im-plugin-grid">
+              <!-- Plugin Cards dynamically injected -->
+              <div class="im-plugin-card" id="plugin-card-feishu">
+                <div class="plugin-card-icon" id="icon-plugin-feishu"></div>
+                <div class="plugin-card-info">
+                  <div class="plugin-name" data-i18n="modal.im.feishu.name">飞书 (Feishu)</div>
+                  <div class="plugin-status" id="plugin-status-feishu">---</div>
+                </div>
+                <div class="plugin-card-arrow">→</div>
+              </div>
+              
+              <!-- Coming Soon Placeholders -->
+              <div class="im-plugin-card disabled">
+                <div class="plugin-card-icon opacity-50">D</div>
+                <div class="plugin-card-info">
+                  <div class="plugin-name opacity-50" data-i18n="modal.im.dingtalk.name">钉钉 (DingTalk)</div>
+                  <div class="plugin-status" data-i18n="modal.im.coming_soon">Coming Soon</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- View 2: Feishu Detail -->
+          <div id="im-view-feishu" class="im-view hidden">
+            <button id="im-back-to-hub" class="im-back-btn">
+              <span>←</span> <span data-i18n="modal.im.back">返回插件列表</span>
+            </button>
+            
+            <div class="nebula-modal-section nebula-form-section">
+              <div class="nebula-form-header">
+                <div class="nebula-modal-label" data-i18n="modal.im.feishu.status_label">运行状态</div>
+                <div class="switch-group">
+                  <span class="switch-label" data-i18n="modal.im.feishu.enabled">启用插件</span>
+                  <label class="nebula-switch">
+                    <input type="checkbox" id="im-feishu-enabled-toggle">
+                    <span class="nebula-switch-slider"></span>
+                  </label>
+                </div>
+              </div>
+              <div class="im-status-card">
+                <div class="status-item">
+                  <span class="status-key" data-i18n="modal.im.feishu.connection">连接模式:</span>
+                  <span class="status-value" id="im-feishu-mode">---</span>
+                </div>
+                <div class="status-item">
+                  <span class="status-key" data-i18n="modal.im.feishu.inbound">累计接收:</span>
+                  <span class="status-value" id="im-feishu-count">0</span>
+                </div>
+                <div class="status-item">
+                  <span class="status-key" data-i18n="modal.im.feishu.admin">管理员:</span>
+                  <span class="status-value" id="im-feishu-admin">---</span>
+                </div>
+                <div class="status-actions">
+                  <button class="nebula-btn-small btn-accent" id="im-feishu-bind-admin" data-i18n="modal.im.feishu.bind_admin">绑定管理员</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="nebula-modal-section nebula-form-section">
+              <div class="nebula-form-header">
+                <div class="nebula-modal-label" data-i18n="modal.im.feishu.config_label">凭据配置</div>
+              </div>
+              <div class="nebula-form-grid">
+                <div class="nebula-form-item">
+                  <label>App ID</label>
+                  <input type="text" id="im-feishu-appid" class="nebula-form-input" placeholder="cli_...">
+                </div>
+                <div class="nebula-form-item">
+                  <label>App Secret</label>
+                  <input type="password" id="im-feishu-secret" class="nebula-form-input" placeholder="******">
+                </div>
+              </div>
+              <button class="copy-btn" id="im-feishu-save" data-i18n="modal.im.feishu.save">保存并应用配置</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="system-modal-overlay" class="nebula-modal-overlay hidden">
+      <div class="nebula-modal-container" role="dialog" aria-modal="true">
+        <div class="nebula-modal-header">
+          <div class="nebula-modal-title">
+            <span id="system-modal-header-icon"></span>
+            <span data-i18n="modal.system.title">系统版本详情</span>
+          </div>
+          <button id="system-modal-close-btn" class="nebula-modal-close" aria-label="close system config">&times;</button>
+        </div>
+
+        <div class="nebula-modal-body">
+          <div class="nebula-modal-section nebula-form-section">
+            <div class="nebula-form-header">
+              <div class="nebula-modal-label" data-i18n="modal.system.summary">版本摘要</div>
+            </div>
+            <div id="system-version-summary" class="system-version-grid"></div>
+          </div>
+
+          <div class="nebula-modal-section nebula-form-section">
+            <div class="nebula-form-header">
+              <div class="nebula-modal-label" data-i18n="modal.system.update">更新状态</div>
+              <button id="system-update-check-btn" class="nebula-btn-small btn-accent" data-i18n="modal.system.check_update">立即检查</button>
+            </div>
+            <div id="system-version-update" class="system-kv-grid"></div>
+          </div>
+
+          <div class="nebula-modal-section nebula-form-section">
+            <div class="nebula-form-header">
+              <div class="nebula-modal-label" data-i18n="modal.system.protocols">协议版本</div>
+            </div>
+            <div id="system-version-protocols" class="system-kv-grid"></div>
+          </div>
+
+          <div class="nebula-modal-section nebula-form-section">
+            <div class="nebula-form-header">
+              <div class="nebula-modal-label" data-i18n="modal.system.schemas">Schema 版本</div>
+            </div>
+            <div id="system-version-schemas" class="system-kv-grid"></div>
+          </div>
+
+          <div class="nebula-modal-section nebula-form-section">
+            <div class="nebula-form-header">
+              <div class="nebula-modal-label" data-i18n="modal.system.slots">版本槽位</div>
+            </div>
+            <div id="system-version-slots" class="system-slot-list"></div>
+          </div>
+
+          <div class="nebula-modal-section nebula-form-section">
+            <div class="nebula-form-header">
+              <div class="nebula-modal-label" data-i18n="modal.system.manifest">统一版本目录</div>
+            </div>
+            <div class="code-block-wrapper">
+              <pre class="code-block"><code id="system-manifest-json">{}</code></pre>
+              <button class="copy-btn" id="copy-system-manifest-btn" data-i18n="modal.system.copy_manifest">复制版本目录</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  <script type="module" src="./entry.js"></script>
+</body>
+</html>
