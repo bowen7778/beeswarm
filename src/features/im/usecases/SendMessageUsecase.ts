@@ -10,7 +10,7 @@ import { IMProvider } from "../IMProvider.js";
 export class SendMessageUsecase {
   constructor(
     @inject(IMConfigService) private readonly configService: IMConfigService,
-    @inject(IMBindingService) private readonly bindingService: IMBindingService,
+    @inject(SYMBOLS.IMBindingService) private readonly bindingService: IMBindingService,
     @inject(CreateOrBindGroupUsecase) private readonly createOrBindGroupUsecase: CreateOrBindGroupUsecase,
     @inject(IMRuntimeStore) private readonly runtimeStore: IMRuntimeStore
   ) {}

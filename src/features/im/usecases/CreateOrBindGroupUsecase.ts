@@ -14,7 +14,7 @@ export class CreateOrBindGroupUsecase {
     @inject(SYMBOLS.LoggerService) private readonly logger: LoggerService,
     @inject(SYMBOLS.ProjectContextService) private readonly projectContext: ProjectContextService,
     @inject(IMConfigService) private readonly configService: IMConfigService,
-    @inject(IMBindingService) private readonly bindingService: IMBindingService,
+    @inject(SYMBOLS.IMBindingService) private readonly bindingService: IMBindingService,
     @inject(IMRuntimeStore) private readonly runtimeStore: IMRuntimeStore
   ) {}
 

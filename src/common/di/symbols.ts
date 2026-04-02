@@ -32,6 +32,7 @@ export const SYMBOLS = {
   IMFacade: Symbol.for("IMFacade"),
   IMWebhookIngressService: Symbol.for("IMWebhookIngressService"),
   IMAdminCaptureService: Symbol.for("IMAdminCaptureService"),
+  IMBindingService: Symbol.for("IMBindingService"),
 
   // Message
   MessageCoreService: Symbol.for("MessageCoreService"),

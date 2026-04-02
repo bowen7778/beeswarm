@@ -128,7 +128,7 @@ function buildContainer(): Container {
   container.bind<MemoryStore>(SYMBOLS.MemoryStore).to(MemoryStore).inSingletonScope();
   container.bind<RouteStore>(SYMBOLS.RouteStore).to(RouteStore).inSingletonScope();
   container.bind<IMConfigService>(IMConfigService).toSelf().inSingletonScope();
-  container.bind<IMBindingService>(IMBindingService).toSelf().inSingletonScope();
+  container.bind<IMBindingService>(SYMBOLS.IMBindingService).to(IMBindingService).inSingletonScope();
   container.bind<IMAdminCaptureService>(SYMBOLS.IMAdminCaptureService).to(IMAdminCaptureService).inSingletonScope();
   container.bind<ProjectModeLockStore>(ProjectModeLockStore).toSelf().inSingletonScope();
   container.bind<HarnessStore>(SYMBOLS.HarnessStore).to(HarnessStore).inSingletonScope();

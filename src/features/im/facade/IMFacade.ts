@@ -18,7 +18,7 @@ export class IMFacade {
 
   constructor(
     @inject(IMConfigService) private readonly configService: IMConfigService,
-    @inject(IMBindingService) private readonly bindingService: IMBindingService,
+    @inject(SYMBOLS.IMBindingService) private readonly bindingService: IMBindingService,
     @inject(SYMBOLS.IMPluginRegistry) private readonly pluginRegistry: IMPluginRegistry,
     @inject(SYMBOLS.IMAdminCaptureService) private readonly adminCaptureService: IMAdminCaptureService,
     @inject(IMRuntimeStore) private readonly runtimeStore: IMRuntimeStore,
