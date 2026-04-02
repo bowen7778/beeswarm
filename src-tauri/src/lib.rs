@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 
 mod bridge;
 mod config;
+mod updater;
 
 fn read_manifest_version(manifest_path: &Path) -> Option<String> {
   let content = std::fs::read_to_string(manifest_path).ok()?;
@@ -100,7 +101,25 @@ pub fn run() {
         let resource_dir = handle.path().resource_dir().expect("failed to get resource dir");
         let app_data_dir = handle.path().app_data_dir().expect("failed to get app data dir");
         let bin_dir = app_data_dir.join("bin");
-        let (final_script_path, final_program_root, current_version) = resolve_runtime_root(&resource_dir, &bin_dir);
+        
+        let (mut final_script_path, mut final_program_root, mut current_version) = resolve_runtime_root(&resource_dir, &bin_dir);
+
+        // --- Hot Update Logic ---
+        println!("[TAURI] Checking for updates... (Current: {})", current_version);
+        if let Some(update) = updater::check_for_updates(&current_version, "bowen7778/beeswarm").await {
+          println!("[TAURI] New version found: {}. Downloading...", update.version);
+          let update_dir = bin_dir.join(format!("v{}", update.version));
+          if updater::download_and_extract(&update.url, &update_dir, &update.signature).await.is_ok() {
+            println!("[TAURI] Update downloaded and verified!");
+            // Use the new version
+            final_program_root = update_dir.clone();
+            final_script_path = update_dir.join("dist").join("cli.cjs");
+            current_version = update.version;
+          } else {
+            eprintln!("[TAURI] Update failed verification or download.");
+          }
+        }
+        // -------------------------
 
         println!("[TAURI] Production mode: Using version {}", current_version);
         let mut sidecar_command = handle.shell().sidecar("node").expect("failed to setup sidecar");

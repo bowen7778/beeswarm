@@ -90,6 +90,27 @@ jobs:
           }
           JSON
 
+      - name: Sign Release Bundle
+        env:
+          BEEMCP_UPDATE_PRIV_KEY: ${{ secrets.BEEMCP_UPDATE_PRIV_KEY }}
+        run: |
+          if [ -n "$BEEMCP_UPDATE_PRIV_KEY" ]; then
+            node -e "
+              const { sign } = require('node:crypto');
+              const fs = require('node:fs');
+              const bundleBuffer = fs.readFileSync('releases/kernel.tar.gz');
+              const privateKey = process.env.BEEMCP_UPDATE_PRIV_KEY;
+              const signature = sign(null, bundleBuffer, privateKey);
+              const signatureB64 = signature.toString('base64');
+              const metadata = JSON.parse(fs.readFileSync('releases/latest.json', 'utf8'));
+              metadata.signature = signatureB64;
+              fs.writeFileSync('releases/latest.json', JSON.stringify(metadata, null, 2));
+              console.log('Bundle signed successfully.');
+            "
+          else
+            echo "Warning: BEEMCP_UPDATE_PRIV_KEY not set, skipping signature."
+          fi
+
       - name: Create Release
         id: create_release
         uses: softprops/action-gh-release@v2

@@ -38,6 +38,10 @@
     "externalBin": [
       "bin/node"
     ],
-    "resources": []
+    "resources": [
+      "../build/dist/*",
+      "../build/ui/*",
+      "../manifest.json"
+    ]
   }
 }
