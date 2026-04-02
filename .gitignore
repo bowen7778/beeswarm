@@ -1,0 +1,40 @@
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Build outputs
+build/
+dist/
+releases/
+src-tauri/target/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Project specific
+.trae/
+.github/
+.beemcp-runtime/
+.tmp-regression-tests/
+tests/
+ui/tests/
+scripts/
+
+# File types to ignore (Security and Repository Size)
+*.log
+*.db
+*.zip
+*.exe
+*.bin
+*.txt
+*.md
+!README.md
+!manifest.json
+!package.json
+!tsconfig*.json
+!tsup.config.ts
+!vite.config.js

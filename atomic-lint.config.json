@@ -1,0 +1,36 @@
+{
+  "enforceMaxLines": false,
+  "maxLines": 240,
+  "include": [
+    "src/api",
+    "src/features",
+    "src/system-bus",
+    "src/platform",
+    "src/common",
+    "src/startup"
+  ],
+  "exclude": [
+    "node_modules",
+    "build",
+    "dist",
+    "src-tauri"
+  ],
+  "legacyAllowList": [
+    { "path": "src/features/harness/HarnessEvaluationService.ts", "owner": "backend-team", "expiresAt": "2026-06-30" },
+    { "path": "src/features/harness/HarnessExecutionService.ts", "owner": "backend-team", "expiresAt": "2026-06-30" },
+    { "path": "src/features/im/feishu/FeishuProvider.ts", "owner": "backend-team", "expiresAt": "2026-06-30" },
+    { "path": "src/features/mcp/services/ToolRegistryService.ts", "owner": "backend-team", "expiresAt": "2026-06-30" },
+    { "path": "src/features/mcp/message/MessageCoreService.ts", "owner": "backend-team", "expiresAt": "2026-06-30" },
+    { "path": "src/features/mcp/message/MessageManagerStore.ts", "owner": "backend-team", "expiresAt": "2026-06-30" },
+    { "path": "src/features/mcp/message/MessageOutboxService.ts", "owner": "backend-team", "expiresAt": "2026-06-30" },
+    { "path": "src/features/mcp/session/HubSchemaInitializer.ts", "owner": "backend-team", "expiresAt": "2026-06-30" },
+    { "path": "src/features/runtime/sse/StreamSnapshotService.ts", "owner": "backend-team", "expiresAt": "2026-06-30" },
+    { "path": "src/api/controllers/IMController.ts", "owner": "backend-team", "expiresAt": "2026-06-30" },
+    { "path": "src/features/channel/channel-ide/drivers/McpIdeChannelDriver.ts", "owner": "backend-team", "expiresAt": "2026-06-30" },
+    { "path": "src/features/memory/MemoryCoreService.ts", "owner": "backend-team", "expiresAt": "2026-06-30" },
+    { "path": "src/features/project-mode/services/ProjectModeStatusService.ts", "owner": "backend-team", "expiresAt": "2026-06-30" },
+    { "path": "src/features/project-mode/usecases/SwitchProjectChannelUsecase.ts", "owner": "backend-team", "expiresAt": "2026-06-30" },
+    { "path": "src/features/project-mode/usecases/SwitchProjectModeUsecase.ts", "owner": "backend-team", "expiresAt": "2026-06-30" }
+  ]
+}
+
