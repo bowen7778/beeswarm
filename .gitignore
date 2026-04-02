@@ -21,7 +21,22 @@ Thumbs.db
 .tmp-regression-tests/
 tests/
 ui/tests/
-scripts/
+scripts/sync.mjs
+scripts/temp-*
+scripts/push-*
+scripts/isogit-*
+scripts/final-*
+scripts/robust-*
+scripts/spawn-*
+scripts/git-diagnostics.mjs
+scripts/js-sync.mjs
+scripts/optimized-sync.mjs
+scripts/push-token-file.mjs
+scripts/push-verbose.mjs
+scripts/robust-push.mjs
+scripts/spawn-push.mjs
+scripts/push-release.mjs
+scripts/download-git*
 
 # File types to ignore (Security and Repository Size)
 *.log
