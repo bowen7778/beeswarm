@@ -1,12 +1,17 @@
 {
   "version": "1.0.0",
   "name": "beeswarm-kernel",
+  "identity": {
+    "appName": "BeeSwarm",
+    "appIdentifier": "beeswarm",
+    "protocolPrefix": "beeswarm"
+  },
   "releaseDate": "2026-04-02",
   "description": "BeeSwarm Kernel",
   "protocols": {
     "mcpServer": "1.2.2",
-    "gateway": "1.0.0",
-    "beeswarm": "1.0.0"
+    "gateway": "5.0.0",
+    "app": "1.0.0"
   },
   "runtime": {
     "node": "20.11.1"

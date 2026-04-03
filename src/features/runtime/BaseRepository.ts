@@ -6,28 +6,19 @@ import { SYMBOLS } from "../../common/di/symbols.js";
 
 @injectable()
 export abstract class BaseRepository {
-  private _db: DatabaseSync | null = null;
-
   constructor(
     @inject(SYMBOLS.DatabaseService) protected readonly dbService: DatabaseService,
-    @inject(SYMBOLS.LoggerService) protected readonly logger: LoggerService,
-    dbPath?: string
-  ) {
-    if (dbPath) {
-      this._db = this.dbService.getConnection(dbPath);
-    }
-  }
+    @inject(SYMBOLS.LoggerService) protected readonly logger: LoggerService
+  ) {}
 
-  protected get db(): DatabaseSync {
-    if (!this._db) {
-      throw new Error(`[BaseRepository] Database not connected. Call connect(dbPath) first.`);
-    }
-    return this._db;
-  }
+  /**
+   * Abstract method to be implemented by child stores to provide their DB path.
+   * This avoids constructor injection race conditions with @inject properties.
+   */
+  protected abstract getDbPath(): string;
 
-  protected connect(dbPath: string) {
-    if (this._db) return;
-    this._db = this.dbService.getConnection(dbPath);
+  private get db(): DatabaseSync {
+    return this.dbService.getConnection(this.getDbPath());
   }
 
   protected exec(sql: string) {
@@ -70,17 +61,40 @@ export abstract class BaseRepository {
   }
 
   protected readSchemaVersion(): number {
-    const row = this.queryOne<{ value: string }>(`
-      SELECT value FROM metadata WHERE key = 'schema_version'
-    `);
-    return row ? parseInt(row.value, 10) : 0;
+    const val = this.getMetadata("sys.version");
+    return val ? parseInt(val, 10) : 0;
   }
 
   protected writeSchemaVersion(version: number) {
-    this.run(`
-      INSERT INTO metadata(key, value) VALUES ('schema_version', ?)
+    this.setMetadata("sys.version", String(version));
+  }
+
+  /**
+   * Standardized access to metadata table (unified facts/versioning).
+   */
+  protected getMetadata(key: string): string | null {
+    try {
+      const row = this.queryOne<{ value: string }>(
+        `SELECT value FROM metadata WHERE key = ? LIMIT 1`,
+        [key]
+      );
+      return row ? String(row.value) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Standardized storage to metadata table.
+   */
+  protected setMetadata(key: string, value: string): void {
+    this.run(
+      `
+      INSERT INTO metadata(key, value) VALUES (?, ?)
       ON CONFLICT(key) DO UPDATE SET value = excluded.value
-    `, [String(version)]);
+    `,
+      [key, String(value)]
+    );
   }
 }
 

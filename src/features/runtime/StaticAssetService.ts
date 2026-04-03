@@ -14,16 +14,23 @@ export class StaticAssetService {
 
   constructor(
     @inject(SYMBOLS.PathResolverService) private readonly pathResolver: PathResolverService,
-    @inject(SYMBOLS.LoggerService) private readonly logger: LoggerService
+    @inject(SYMBOLS.LoggerService) private readonly logger: LoggerService,
+    @inject(SYMBOLS.VersionManager) private readonly versionManager: VersionManager
   ) {
     this._staticDir = this.resolveStaticDir();
   }
 
   private resolveStaticDir(): string {
-    // Priority: search build artifacts (build/ui) before source directories.
-    // This ensures that if build is executed, the latest compiled code is loaded.
-    const roots = [
+    const appIdentifier = this.versionManager.appIdentifier;
+    const isDev = process.env[`${appIdentifier.toUpperCase()}_IS_DEV`] === '1' || process.env.NODE_ENV === 'development';
+    
+    // Priority list for static assets
+    const roots = isDev ? [
+      path.join(process.cwd(), "ui"), // Dev mode: prefer source
       path.join(process.cwd(), "build", "ui"),
+      path.join(this.pathResolver.programRoot, "ui")
+    ] : [
+      path.join(process.cwd(), "build", "ui"), // Production: prefer build artifacts
       path.join(this.pathResolver.programRoot, "ui"),
       path.join(path.dirname(this.pathResolver.programRoot), "ui"),
       path.join(process.cwd(), "ui")

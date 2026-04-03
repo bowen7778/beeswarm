@@ -1,4 +1,5 @@
 import { injectable, inject } from "inversify";
+import { VersionManager } from "../../runtime/VersionManager.js";
 import path from "node:path";
 import fs from "node:fs";
 import crypto from "node:crypto";
@@ -27,11 +28,21 @@ export class SessionApplicationService {
     @inject(SYMBOLS.McpSessionBindingStore) private readonly mcpBindingStore: McpSessionBindingStore,
     @inject(SYMBOLS.LoggerService) private readonly logger: LoggerService,
     @inject(SYMBOLS.PathResolverService) private readonly pathResolver: PathResolverService,
-    @inject(SYMBOLS.MessageEvents) private readonly events: MessageEvents
+    @inject(SYMBOLS.MessageEvents) private readonly events: MessageEvents,
+    @inject(SYMBOLS.VersionManager) private readonly versionManager: VersionManager
   ) {}
 
   public setOutboxService(outbox: MessageOutboxService) {
     this.outboxService = outbox;
+  }
+
+  public getInitialWelcomeMessage(projectName: string): string {
+    const appName = this.versionManager.appName;
+    const prefix = this.versionManager.protocolPrefix;
+    return `欢迎使用 ${appName} 智能编排！
+项目 [${projectName}] 已成功连接。
+
+你可以直接输入指令，或者让 AI 调用 '${prefix}_orchestrate' 开始工作。`;
   }
 
   /**
@@ -80,7 +91,7 @@ export class SessionApplicationService {
       return { success: false, message: `Failed to remove registration record: ${err?.message || "Internal error"}` };
     }
 
-    // 3. Attempt full cleanup of project configuration directory (.beemcp)
+    // 3. Attempt full cleanup of project data directory (e.g. .beeswarm)
     if (projectRoot) {
       const dataDir = this.pathResolver.getProjectDataDir(projectRoot);
       if (fs.existsSync(dataDir)) {

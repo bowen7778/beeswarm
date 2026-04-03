@@ -9,7 +9,6 @@ yarn-error.log*
 build/
 dist/
 releases/
-src-tauri/target/
 
 # OS files
 .DS_Store
@@ -17,11 +16,14 @@ Thumbs.db
 
 # Engineering & Local Tools (Ignored)
 .trae/
-.beemcp-runtime/
+! .trae/rules/
+.*-runtime/
 releases/
-scripts/
 tests/
 atomic-lint.config.json
+
+# Scripts are essential
+# scripts/ (removed from ignore)
 
 # File types to ignore (Security and Repository Size)
 *.log
@@ -38,3 +40,6 @@ atomic-lint.config.json
 !tsconfig*.json
 !tsup.config.ts
 !vite.config.js
+
+# Native binaries
+node-*

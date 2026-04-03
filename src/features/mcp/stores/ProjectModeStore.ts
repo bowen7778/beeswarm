@@ -4,24 +4,29 @@ import { SYMBOLS } from "../../../common/di/symbols.js";
 import { DatabaseService } from "../../runtime/DatabaseService.js";
 import { PathResolverService } from "../../runtime/PathResolverService.js";
 import { MessageEvents } from "../message/MessageEvents.js";
+import { BaseRepository } from "../../runtime/BaseRepository.js";
+import { LoggerService } from "../../runtime/LoggerService.js";
 
 @injectable()
-export class ProjectModeStore {
-  private readonly supportedModes = new Set(["single_agent"]);
-  private readonly supportedSingleAgentChannels = new Set(["mcp_ide"]);
+export class ProjectModeStore extends BaseRepository {
+  private readonly supportedModes = new Set(["single_agent", "multi_agent"]);
+  private readonly supportedSingleAgentChannels = new Set(["mcp_ide", "cli_codex", "cli_cc"]);
 
   constructor(
-    @inject(SYMBOLS.DatabaseService) private readonly dbService: DatabaseService,
+    @inject(SYMBOLS.DatabaseService) dbService: DatabaseService,
     @inject(SYMBOLS.PathResolverService) private readonly pathResolver: PathResolverService,
-    @inject(SYMBOLS.MessageEvents) private readonly events: MessageEvents
-  ) {}
+    @inject(SYMBOLS.MessageEvents) private readonly events: MessageEvents,
+    @inject(SYMBOLS.LoggerService) logger: LoggerService
+  ) {
+    super(dbService, logger);
+  }
 
-  private get db() {
-    return this.dbService.getConnection(this.pathResolver.hubDbPath);
+  protected getDbPath(): string {
+    return this.pathResolver.hubDbPath;
   }
 
   public readProjectModeConfig(projectId: string) {
-    const row = this.db.prepare(`
+    const row = this.queryOne<any>(`
       SELECT
         project_id as projectId,
         project_mode as projectMode,
@@ -35,7 +40,7 @@ export class ProjectModeStore {
       FROM projects
       WHERE project_id = ?
       LIMIT 1
-    `).get(projectId) as any;
+    `, [projectId]);
     if (!row) return null;
     return {
       projectId: String(row.projectId || ""),
@@ -62,12 +67,12 @@ export class ProjectModeStore {
     const mode = String(input.mode || "").trim();
     if (!this.supportedModes.has(mode)) return;
     const now = new Date().toISOString();
-    this.db.prepare(`
+    this.run(`
       UPDATE projects
       SET project_mode = ?, mode_updated_at = ?, mode_updated_by = ?, last_switch_trace_id = ?,
           last_switch_remark = ?, updated_at = ?
       WHERE project_id = ?
-    `).run(mode, now, String(input.operator || ""), String(input.traceId || ""), String(input.remark || ""), now, projectId);
+    `, [mode, now, String(input.operator || ""), String(input.traceId || ""), String(input.remark || ""), now, projectId]);
     this.events.emitProjectRegistryChanged();
   }
 
@@ -83,12 +88,12 @@ export class ProjectModeStore {
     const channel = String(input.channel || "").trim();
     if (!this.supportedSingleAgentChannels.has(channel)) return;
     const now = new Date().toISOString();
-    this.db.prepare(`
+    this.run(`
       UPDATE projects
       SET single_agent_channel = ?, channel_updated_at = ?, channel_updated_by = ?, last_switch_trace_id = ?,
           last_switch_remark = ?, updated_at = ?
       WHERE project_id = ?
-    `).run(channel, now, String(input.operator || ""), String(input.traceId || ""), String(input.remark || ""), now, projectId);
+    `, [channel, now, String(input.operator || ""), String(input.traceId || ""), String(input.remark || ""), now, projectId]);
     this.events.emitProjectRegistryChanged();
   }
 
@@ -105,11 +110,11 @@ export class ProjectModeStore {
     const projectId = String(input.projectId || "").trim();
     if (!projectId) return;
     const now = new Date().toISOString();
-    this.db.prepare(`
+    this.run(`
       INSERT INTO project_mode_audits(
         id, project_id, action, from_value, to_value, operator, trace_id, remark, result, created_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
+    `, [
       randomUUID(),
       projectId,
       String(input.action || ""),
@@ -120,16 +125,17 @@ export class ProjectModeStore {
       String(input.remark || ""),
       String(input.result || ""),
       now
-    );
+    ]);
   }
 
   private normalizeMode(mode: string): "single_agent" | "multi_agent" {
-    void mode;
+    if (mode === "multi_agent") return "multi_agent";
     return "single_agent";
   }
 
   private normalizeSingleAgentChannel(channel: string): "mcp_ide" | "cli_codex" | "cli_cc" {
-    void channel;
+    if (channel === "cli_codex") return "cli_codex";
+    if (channel === "cli_cc") return "cli_cc";
     return "mcp_ide";
   }
 }

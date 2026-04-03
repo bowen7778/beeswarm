@@ -8,6 +8,16 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
     host: '0.0.0.0',
+    proxy: {
+      '/api': {
+        target: 'http://127.0.0.1:3000',
+        changeOrigin: true,
+      },
+      '/manifest.json': {
+        target: 'http://127.0.0.1:3000',
+        changeOrigin: true,
+      }
+    }
   },
   build: {
     outDir: '../build/ui',

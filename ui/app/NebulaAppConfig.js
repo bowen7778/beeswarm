@@ -2,11 +2,13 @@ import { apiClient } from '../services/api/ApiClient.js';
 import { logger } from '../services/logger.js';
 import { i18n } from '../services/i18n.js';
 import { DOM_IDS } from './NebulaDom.js';
+import { Icons } from '../utils/Icons.js';
 
 export class NebulaConfigController {
   constructor(app) {
     this.app = app;
     this.captureTimer = null;
+    this.editingBotId = null; // Track which bot is being edited
   }
 
   get state() {
@@ -52,6 +54,8 @@ export class NebulaConfigController {
       hubView.classList.add('hidden');
       feishuView.classList.remove('hidden');
       titleText.innerText = i18n.t('modal.im.feishu.name');
+      this.editingBotId = null;
+      this.getElement(DOM_IDS.IM_FEISHU_BOT_EDIT)?.classList.add('hidden');
       await this.loadFeishuConfig();
     }
   }
@@ -79,15 +83,151 @@ export class NebulaConfigController {
       const config = typeof res.json === 'function' ? await res.json() : res;
       if (config.success && config.data?.plugins?.feishu) {
         const p = config.data.plugins.feishu;
-        const d = p.credentials || {};
-        this.requireElement(DOM_IDS.IM_FEISHU_APPID).value = d.appId || '';
-        this.requireElement(DOM_IDS.IM_FEISHU_SECRET).value = '';
+        
+        // Update master toggle
         const toggle = this.getElement(DOM_IDS.IM_FEISHU_ENABLED_TOGGLE);
         if (toggle) toggle.checked = !!p.enabled;
+        
+        // Render bot list
+        this.renderBotList(p.instances || [], p.masterBotId);
+        
         await this.updateFeishuStatusUI(p);
       }
     } catch (err) {
       logger.error('Failed to load Feishu config', err);
+    }
+  }
+
+  renderBotList(instances, masterBotId) {
+    const list = this.getElement(DOM_IDS.IM_FEISHU_BOT_LIST);
+    if (!list) return;
+    
+    if (!instances || instances.length === 0) {
+      list.innerHTML = `<div class="empty-list-hint">${i18n.t('hub.empty.desc')}</div>`;
+      return;
+    }
+    
+    list.innerHTML = instances.map(bot => `
+      <div class="im-bot-item ${bot.id === masterBotId ? 'master' : ''}">
+        <div class="bot-info">
+          <div class="bot-name">${this.app.renderController.escapeHtml(bot.name)} ${bot.id === masterBotId ? `<span class="master-badge">${i18n.t('modal.im.feishu.master_badge') || 'DEFAULT'}</span>` : ''}</div>
+          <div class="bot-meta">ID: ${bot.id} · ${bot.enabled ? i18n.t('status.online') : i18n.t('status.offline')}</div>
+        </div>
+        <div class="bot-actions">
+          ${bot.id !== masterBotId ? `<button class="bot-action-btn set-master" data-id="${bot.id}" title="${i18n.t('modal.im.feishu.set_master') || 'Set as Default'}">${Icons.STAR || '★'}</button>` : ''}
+          <button class="bot-action-btn edit" data-id="${bot.id}" title="${i18n.t('common.edit') || 'Edit'}">${Icons.EDIT || '✎'}</button>
+          <button class="bot-action-btn delete" data-id="${bot.id}" title="${i18n.t('common.delete') || 'Delete'}">${Icons.DELETE || '×'}</button>
+        </div>
+      </div>
+    `).join('');
+    
+    // Bind actions
+    list.querySelectorAll('.bot-action-btn.edit').forEach(btn => {
+      btn.onclick = () => this.showBotEdit(btn.dataset.id, instances.find(i => i.id === btn.dataset.id));
+    });
+    list.querySelectorAll('.bot-action-btn.delete').forEach(btn => {
+      btn.onclick = () => this.deleteBot(btn.dataset.id);
+    });
+    list.querySelectorAll('.bot-action-btn.set-master').forEach(btn => {
+      btn.onclick = () => this.setMasterBot(btn.dataset.id);
+    });
+    
+    list.querySelectorAll('.bot-action-btn.edit').forEach(btn => {
+      const bot = instances.find(i => i.id === btn.dataset.id);
+      btn.onclick = () => this.showBotEdit(btn.dataset.id, bot);
+    });
+    
+    list.querySelectorAll('.bot-action-btn.delete').forEach(btn => {
+      btn.onclick = () => this.deleteBot(btn.dataset.id);
+    });
+  }
+
+  showBotEdit(botId = null, data = null) {
+    this.editingBotId = botId;
+    const form = this.requireElement(DOM_IDS.IM_FEISHU_BOT_EDIT);
+    const title = this.requireElement(DOM_IDS.IM_FEISHU_EDIT_TITLE);
+    
+    form.classList.remove('hidden');
+    title.innerText = botId ? (i18n.t('modal.im.feishu.edit_bot') || '编辑机器人') : i18n.t('modal.im.feishu.add_bot');
+    
+    this.requireElement(DOM_IDS.IM_FEISHU_BOT_NAME).value = data?.name || '';
+    this.requireElement(DOM_IDS.IM_FEISHU_BOT_APPID).value = data?.credentials?.appId || '';
+    this.requireElement(DOM_IDS.IM_FEISHU_BOT_SECRET).value = ''; // Always clear secret on edit
+    this.requireElement(DOM_IDS.IM_FEISHU_BOT_MODE).value = data?.routingPolicy?.connectionMode || 'long_connection';
+    
+    form.scrollIntoView({ behavior: 'smooth' });
+  }
+
+  hideBotEdit() {
+    this.editingBotId = null;
+    this.getElement(DOM_IDS.IM_FEISHU_BOT_EDIT)?.classList.add('hidden');
+  }
+
+  async saveBot() {
+    const name = this.requireElement(DOM_IDS.IM_FEISHU_BOT_NAME).value;
+    const appId = this.requireElement(DOM_IDS.IM_FEISHU_BOT_APPID).value;
+    const appSecret = this.requireElement(DOM_IDS.IM_FEISHU_BOT_SECRET).value;
+    const mode = this.requireElement(DOM_IDS.IM_FEISHU_BOT_MODE).value;
+    
+    if (!name || !appId) {
+      this.app.emitMonitor('warn', 'Name and App ID are required', { domain: 'im' });
+      return;
+    }
+    
+    const botData = {
+      name,
+      enabled: true,
+      credentials: { appId },
+      routingPolicy: { connectionMode: mode, autoCreateGroup: true }
+    };
+
+    if (appSecret) {
+      botData.credentials.appSecret = appSecret;
+    }
+    
+    try {
+      let res;
+      if (this.editingBotId) {
+        res = await apiClient.updateBotInstance({ pluginId: 'feishu', botId: this.editingBotId, patch: botData });
+      } else {
+        res = await apiClient.addBotInstance({ pluginId: 'feishu', instance: botData });
+      }
+      
+      const result = typeof res.json === 'function' ? await res.json() : res;
+      if (result.success) {
+        this.app.emitMonitor('info', 'Bot instance saved successfully', { domain: 'im' });
+        this.hideBotEdit();
+        await this.loadFeishuConfig();
+      }
+    } catch (err) {
+      logger.error('Failed to save bot', err);
+    }
+  }
+
+  async deleteBot(botId) {
+    if (!confirm('Are you sure you want to delete this bot?')) return;
+    try {
+      const res = await apiClient.removeBotInstance({ pluginId: 'feishu', botId });
+      const result = typeof res.json === 'function' ? await res.json() : res;
+      if (result.success) {
+        this.app.emitMonitor('info', 'Bot instance removed', { domain: 'im' });
+        await this.loadFeishuConfig();
+      }
+    } catch (err) {
+      logger.error('Failed to delete bot', err);
+    }
+  }
+
+  async setMasterBot(botId) {
+    try {
+      const res = await apiClient.setMasterBot({ pluginId: 'feishu', botId });
+      const result = typeof res.json === 'function' ? await res.json() : res;
+      if (result.success) {
+        this.app.emitMonitor('info', 'Master bot updated', { domain: 'im' });
+        await this.loadFeishuConfig();
+      }
+    } catch (err) {
+      logger.error('Failed to set master bot', err);
     }
   }
 
@@ -110,7 +250,11 @@ export class NebulaConfigController {
       if (status.success && status.data) {
         const runtime = status.data;
         const adminCapture = adminStatus?.success ? adminStatus.data || {} : {};
-        this.requireElement(DOM_IDS.IM_FEISHU_MODE).innerText = config?.routingPolicy?.connectionMode || 'webhook';
+        
+        // Find master bot name
+        const masterBot = runtime.instances?.find(i => i.id === runtime.masterBotId);
+        this.requireElement(DOM_IDS.IM_FEISHU_MASTER_BOT_NAME).innerText = masterBot ? masterBot.name : (runtime.masterBotId || '---');
+        
         this.requireElement(DOM_IDS.IM_FEISHU_COUNT).innerText = String(runtime.inboundTotal || 0);
         const adminEl = this.requireElement(DOM_IDS.IM_FEISHU_ADMIN);
         const bindBtn = this.requireElement(DOM_IDS.IM_FEISHU_BIND_ADMIN);
@@ -170,50 +314,53 @@ export class NebulaConfigController {
 
   async startAdminCapture() {
     const bindBtn = this.getElement(DOM_IDS.IM_FEISHU_BIND_ADMIN);
-    if (!bindBtn || bindBtn.disabled) return;
+    if (!bindBtn) {
+      console.error('[Nebula] Admin bind button not found');
+      return;
+    }
+    if (bindBtn.disabled) {
+      console.warn('[Nebula] Admin bind button is already disabled');
+      return;
+    }
+    
     const originalText = bindBtn.innerText;
     bindBtn.innerText = i18n.t('hub.initializing') || 'Starting...';
     bindBtn.disabled = true;
+    
     try {
+      console.log('[Nebula] Requesting admin capture start...');
       const res = await apiClient.startAdminCapture({ pluginId: 'feishu' });
       const result = typeof res.json === 'function' ? await res.json() : res;
+      
+      console.log('[Nebula] Admin capture start response:', result);
+      
       if (result.success) {
         this.app.emitMonitor('info', 'Admin capture mode started. Please message the bot in Feishu.', { domain: 'im', action: 'capture-start' });
         await this.updateFeishuStatusUI();
       } else {
-        this.app.emitMonitor('warn', `Start capture failed: ${result.error?.message || 'Unknown error'}`, { domain: 'im', action: 'capture-failed' });
+        const errorMsg = result.error?.message || 'Unknown error';
+        this.app.emitMonitor('warn', `Start capture failed: ${errorMsg}`, { domain: 'im', action: 'capture-failed' });
+        console.error('[Nebula] Start capture failed:', result.error);
         bindBtn.innerText = originalText;
         bindBtn.disabled = false;
       }
     } catch (err) {
-      logger.error('Start capture failed', err);
-      this.app.emitMonitor('warn', 'Failed to start admin capture (Network or IPC error)', { domain: 'im', action: 'capture-error' });
+      console.error('[Nebula] Start capture exception:', err);
+      this.app.emitMonitor('warn', `Failed to start admin capture: ${err.message}`, { domain: 'im', action: 'capture-error' });
       bindBtn.innerText = originalText;
       bindBtn.disabled = false;
     }
   }
 
   async saveFeishuConfig(isSilent = false) {
-    const appId = this.requireElement(DOM_IDS.IM_FEISHU_APPID).value;
-    const appSecret = this.requireElement(DOM_IDS.IM_FEISHU_SECRET).value;
     const enabled = this.requireElement(DOM_IDS.IM_FEISHU_ENABLED_TOGGLE).checked;
-    const mode = this.requireElement(DOM_IDS.IM_FEISHU_MODE).innerText || 'webhook';
-    const payload = { pluginId: 'feishu', config: { appId, appSecret, enabled, connectionMode: mode } };
+    const payload = { pluginId: 'feishu', config: { enabled } };
     try {
-      const btn = this.requireElement(DOM_IDS.IM_FEISHU_SAVE);
       const res = await apiClient.saveImConfig(payload);
       const result = typeof res.json === 'function' ? await res.json() : res;
       if (result.success) {
-        if (!isSilent) this.app.emitMonitor('info', 'Feishu configuration saved. Restarting connection...', { domain: 'im', action: 'save-config' });
+        if (!isSilent) this.app.emitMonitor('info', 'Feishu configuration updated', { domain: 'im', action: 'save-config' });
         await this.restartFeishuConnection(true);
-        if (!isSilent) {
-          btn.innerText = i18n.t('modal.mcp.copied');
-          btn.classList.add('copied');
-          setTimeout(() => {
-            btn.innerText = i18n.t('modal.im.feishu.save');
-            btn.classList.remove('copied');
-          }, 2000);
-        }
       }
     } catch (err) {
       logger.error('Save failed', err);
@@ -242,12 +389,13 @@ export class NebulaConfigController {
       const discovery = typeof res.json === 'function' ? await res.json() : res;
       if (discovery.success && discovery.data?.transports) {
         const data = discovery.data;
-        const sseSnippet = { mcpServers: { beemcp: { url: data.transports.sse.url } } };
+        const appIdentifier = discovery.data?.appIdentifier || 'beeswarm';
+        const sseSnippet = { mcpServers: { [appIdentifier]: { url: data.transports.sse.url } } };
         const ssePre = this.getElement(DOM_IDS.CODE_SNIPPET_SSE);
         if (ssePre) ssePre.innerText = JSON.stringify(sseSnippet, null, 2);
         const stdioSnippet = {
           mcpServers: {
-            beemcp: {
+            [appIdentifier]: {
               command: data.transports.stdio.command,
               args: data.transports.stdio.args,
               env: data.transports.stdio.env
@@ -257,6 +405,7 @@ export class NebulaConfigController {
         const stdioPre = this.getElement(DOM_IDS.CODE_SNIPPET_STDIO);
         if (stdioPre) stdioPre.innerText = JSON.stringify(stdioSnippet, null, 2);
       } else {
+
         this.app.emitMonitor('warn', 'MCP Discovery data incomplete', { domain: 'mcp', action: 'show-config' });
       }
     } catch (err) {
@@ -386,22 +535,13 @@ export class NebulaConfigController {
             }
           }, 'runtime:status');
         }
-        this.app.updateMsg.innerText = `v${info.version} 已下载完成，请关闭并重新打开 BeeMCP 以生效。`;
-        this.app.updateBtn.innerText = '立即重启';
+        this.app.updateMsg.innerText = `v${info.version} 已下载完成，请手动重启 ${this.app.identity.appName} 以生效。`;
+        this.app.updateBtn.innerText = '刷新页面';
         this.app.updateBtn.disabled = false;
-        this.app.updateBtn.onclick = async () => {
-          try {
-            this.app.updateBtn.disabled = true;
-            this.app.updateBtn.innerText = '重启中...';
-            await apiClient.restartDesktop();
-          } catch (restartErr) {
-            this.app.updateBtn.disabled = false;
-            this.app.updateBtn.innerText = '重试重启';
-            this.app.updateMsg.innerText = `自动重启失败，请手动重启 BeeMCP：${restartErr.message || restartErr}`;
-            logger.error('Restart failed', restartErr);
-          }
+        this.app.updateBtn.onclick = () => {
+          window.location.reload();
         };
-        this.app.emitMonitor('info', `Update v${info.version} downloaded. Waiting for full app restart.`, { domain: 'system', action: 'update-ready' });
+        this.app.emitMonitor('info', `Update v${info.version} downloaded. Waiting for manual app restart.`, { domain: 'system', action: 'update-ready' });
       } else {
         throw new Error(result.error?.message || 'Download failed');
       }

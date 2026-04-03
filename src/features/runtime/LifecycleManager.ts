@@ -11,8 +11,10 @@ import { MigrationService } from "./MigrationService.js";
 import { DatabaseService } from "./DatabaseService.js";
 import { UpdateWorkerService } from "./UpdateWorkerService.js";
 import { McpDiscoveryService } from "./McpDiscoveryService.js";
-import { WindowService } from "./WindowService.js";
+import { TrayService } from "./TrayService.js";
 import { PortOwnershipService } from "./PortOwnershipService.js";
+import { VersionManager } from "./VersionManager.js";
+import { PlatformHelper } from "./PlatformHelper.js";
 
 /**
  * Manages the application lifecycle, including booting and shutting down services.
@@ -34,7 +36,8 @@ export class LifecycleManager {
     @inject(SYMBOLS.DatabaseService) private readonly db: DatabaseService,
     @inject(SYMBOLS.UpdateWorkerService) private readonly updateWorker: UpdateWorkerService,
     @inject(SYMBOLS.McpDiscoveryService) private readonly mcpDiscovery: McpDiscoveryService,
-    @inject(SYMBOLS.WindowService) private readonly window: WindowService
+    @inject(SYMBOLS.TrayService) private readonly tray: TrayService,
+    @inject(SYMBOLS.VersionManager) public readonly versionManager: VersionManager
   ) {}
 
   /**
@@ -43,7 +46,15 @@ export class LifecycleManager {
   async boot(): Promise<void> {
     if (this.isBooted) return;
 
-    this.logger.info("SYSTEM", "Booting BeeSwarm Server...");
+    const appName = this.versionManager.appName;
+    const appIdentifier = this.versionManager.appIdentifier;
+    
+    // Initialize prefix for environment variables
+    import("../../common/utils/UnifiedEnv.js").then(({ UnifiedEnv }) => {
+      UnifiedEnv.setPrefix(appIdentifier);
+    });
+
+    this.logger.info("SYSTEM", `Booting ${appName} Server...`);
 
     try {
       // 1. Singleton Lock / Attach
@@ -55,8 +66,8 @@ export class LifecycleManager {
         if (err.message.includes("HOST_SINGLETON_ALREADY_RUNNING")) {
           const activePid = err.message.split(":")[1];
           // If already running and we are in Stdio mode, switch to Attach Mode and continue.
-          // Otherwise (e.g. double-clicking desktop app), exit.
-          const isStdio = !process.stdin.isTTY || process.env.BEESWARM_ATTACH_MODE === '1';
+          // Otherwise (e.g. launching second instance), exit.
+          const isStdio = !process.stdin.isTTY || process.env[`${appIdentifier.toUpperCase()}_ATTACH_MODE`] === '1';
           if (isStdio) {
             isMaster = false;
             this.logger.info("SYSTEM", `Host already running (PID: ${activePid}). Entering Attach Mode.`);
@@ -86,7 +97,8 @@ export class LifecycleManager {
 
         // Dynamic port negotiation
         let finalPort = this.config.uiPort;
-        if (process.env.BEESWARM_IS_DEV === '1') {
+        const isDev = process.env[`${appIdentifier.toUpperCase()}_IS_DEV`] === '1' || process.env.NODE_ENV === 'development';
+        if (isDev) {
           this.logger.info("SYSTEM", `Dev mode: Attempting to use fixed port ${finalPort}`);
         }
         finalPort = await this.portOwnership.findAvailablePort(finalPort);
@@ -116,7 +128,25 @@ export class LifecycleManager {
       }
 
       this.isBooted = true;
-      this.logger.info("SYSTEM", ">>> BeeMCP Core Booted (Zero-Binding Mode) <<<");
+      this.logger.info("SYSTEM", `>>> ${appName} Core Booted (Zero-Binding Mode) <<<`);
+
+      // 4. Standalone Service Extensions: Tray & Browser
+      if (isMaster) {
+        const finalPort = this.config.uiPort; // This might be negotiated, but masterSingleton has the latest
+        const uiUrl = `http://127.0.0.1:${finalPort}`;
+        
+        // Initialize Tray
+        this.tray.initialize(uiUrl, () => this.shutdown()).catch(e => {
+          this.logger.error("SYSTEM", "Failed to initialize tray", e);
+        });
+
+        // Auto-launch browser if not in dev mode (dev mode usually has its own tab)
+        const isDev = process.env[`${appIdentifier.toUpperCase()}_IS_DEV`] === '1' || process.env.NODE_ENV === 'development';
+        if (!isDev && this.config.autoOpenBrowser) {
+          this.logger.info("SYSTEM", `Opening dashboard: ${uiUrl}`);
+          PlatformHelper.openBrowser(uiUrl);
+        }
+      }
     } catch (err: any) {
       this.logger.error("SYSTEM", "Boot failed", err);
       throw err;
@@ -129,6 +159,7 @@ export class LifecycleManager {
   async shutdown(): Promise<void> {
     this.logger.info("SYSTEM", "Shutting down...");
     try {
+      this.tray.shutdown();
       await this.runtimeOrchestrator.stop();
       await this.ui.stop();
       await this.mcp.stop();

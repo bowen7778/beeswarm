@@ -1,12 +1,12 @@
 {
-  "name": "beeswarm-server",
+  "name": "beeswarm-kernel",
   "version": "1.0.0",
-  "description": "BeeSwarm Model Context Protocol Server",
-  "author": "BeeSwarm Team",
+  "description": "Model Context Protocol Server",
+  "author": "Orchestrator Team",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/bowen7778/beeswarm"
+    "url": "https://github.com/bowen7778/mcp-orchestrator"
   },
   "type": "module",
   "main": "build/dist/cli.cjs",
@@ -25,20 +25,21 @@
     "lint:ui": "pnpm run lint:ui:contract && pnpm run lint:ui:i18n",
     "lint:ui:contract": "node scripts/lint-ui-contract.mjs",
     "lint:ui:i18n": "node scripts/lint-ui-i18n.mjs",
-    "clean": "node -e \"const {execSync}=require('child_process'); const fs=require('fs'); const path=require('path'); try{execSync('taskkill /F /IM app.exe /T',{stdio:'ignore'});}catch(e){} try{execSync('wmic process where \\\"commandline like '%cli.cjs%'\\\" delete',{stdio:'ignore'});}catch(e){} const roots=[process.cwd()]; const rel=['../build','./build','./dist','./src-tauri/target']; for(const r of roots){ for(const p of rel){ try { fs.rmSync(path.resolve(r,p),{recursive:true,force:true}); } catch(e){} } }\""
+    "check:full": "node scripts/full-health-check.mjs",
+    "clean": "node scripts/clean.mjs"
   },
   "dependencies": {
     "@larksuiteoapi/node-sdk": "^1.60.0",
     "@modelcontextprotocol/sdk": "^1.5.0",
     "express": "^4.21.2",
     "inversify": "^6.2.2",
+    "open": "^11.0.0",
     "reflect-metadata": "^0.2.2",
+    "systray2": "^2.1.4",
     "zod": "^3.24.2"
   },
   "devDependencies": {
     "@swc/core": "^1.15.21",
-    "@tauri-apps/api": "^2.10.1",
-    "@tauri-apps/cli": "^2.10.1",
     "@types/express": "^5.0.0",
     "@types/node": "^22.13.4",
     "git-push": "^0.1.1",

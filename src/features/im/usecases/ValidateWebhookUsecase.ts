@@ -1,7 +1,9 @@
 import { injectable, inject } from "inversify";
 import { createHash } from "node:crypto";
+import { SYMBOLS } from "../../../common/di/symbols.js";
 import { IMConfigService } from "../services/IMConfigService.js";
 import { IMRuntimeStore } from "../stores/IMRuntimeStore.js";
+import { LoggerService } from "../../runtime/LoggerService.js";
 
 @injectable()
 export class ValidateWebhookUsecase {
@@ -9,10 +11,24 @@ export class ValidateWebhookUsecase {
 
   constructor(
     @inject(IMConfigService) private readonly configService: IMConfigService,
-    @inject(IMRuntimeStore) private readonly runtimeStore: IMRuntimeStore
+    @inject(IMRuntimeStore) private readonly runtimeStore: IMRuntimeStore,
+    @inject(SYMBOLS.LoggerService) private readonly logger: LoggerService
   ) {}
 
-  public async execute(providerId: string, headers: Record<string, any>, rawBody: string, payload: any): Promise<{ ok: boolean; reason?: string }> {
+  /**
+   * Execute webhook validation.
+   */
+  public async execute(input: {
+    providerId: string;
+    headers: Record<string, any>;
+    rawBody: string;
+    payload: any;
+    botId?: string;
+  }): Promise<{ ok: boolean; reason?: string }> {
+    const { providerId, headers, rawBody, payload, botId } = input;
+    this.logger.info("IM", `[${providerId}] Validating webhook (Bot: ${botId || 'default'})...`);
+    this.logger.debug("IM", `[${providerId}] Raw Headers: ${JSON.stringify(headers)}`);
+    
     const cfg = await this.configService.readConfig();
     const plugin = cfg.plugins[providerId];
     const isAdminCapturing = this.runtimeStore.getAdminCapture().active;
@@ -22,9 +38,22 @@ export class ValidateWebhookUsecase {
       return { ok: false, reason: "im_disabled" };
     }
 
-    const credentials = plugin.credentials || {};
-    const verificationToken = String(credentials.verificationToken || "");
-    const signEncryptKey = String(credentials.signEncryptKey || "");
+    // Determine credentials: specific instance or legacy global
+    let verificationToken = "";
+    let signEncryptKey = "";
+
+    if (botId && plugin.instances) {
+      const instance = plugin.instances.find(i => i.id === botId);
+      if (instance && instance.credentials) {
+        verificationToken = String(instance.credentials.verificationToken || "");
+        signEncryptKey = String(instance.credentials.signEncryptKey || "");
+      }
+    }
+
+    if (!verificationToken && !signEncryptKey) {
+      verificationToken = String(plugin.credentials?.verificationToken || "");
+      signEncryptKey = String(plugin.credentials?.signEncryptKey || "");
+    }
     
     if (!verificationToken && !signEncryptKey && !isAdminCapturing) {
       this.runtimeStore.touchStatus(providerId, { lastError: "webhook_blocked_security_not_enabled", lastErrorCode: "IM_SECURITY_NOT_ENABLED", lastBlockReason: "security_not_enabled" });

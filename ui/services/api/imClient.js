@@ -48,5 +48,36 @@ export const imClient = {
     return await apiFetch(`/api/im/long_connection/restart?provider=${encodeURIComponent(pluginId)}`, {
       method: 'POST'
     });
+  },
+
+  async addBotInstance(payload) {
+    const { pluginId, instance } = payload;
+    return await apiFetch(`/api/im/bot/add?provider=${encodeURIComponent(pluginId)}`, {
+      method: 'POST',
+      body: instance
+    });
+  },
+
+  async removeBotInstance(payload) {
+    const { pluginId, botId } = payload;
+    return await apiFetch(`/api/im/bot/remove?provider=${encodeURIComponent(pluginId)}&botId=${encodeURIComponent(botId)}`, {
+      method: 'POST'
+    });
+  },
+
+  async updateBotInstance(payload) {
+    const { pluginId, botId, patch } = payload;
+    return await apiFetch(`/api/im/bot/update?provider=${encodeURIComponent(pluginId)}&botId=${encodeURIComponent(botId)}`, {
+      method: 'POST',
+      body: patch
+    });
+  },
+
+  async setMasterBot(payload) {
+    const { pluginId, botId } = payload;
+    return await apiFetch(`/api/im/bot/set_master?provider=${encodeURIComponent(pluginId)}`, {
+      method: 'POST',
+      body: { botId }
+    });
   }
 };

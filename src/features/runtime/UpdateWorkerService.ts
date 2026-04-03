@@ -4,11 +4,9 @@ import path from "node:path";
 import https from "node:https";
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
+import { VersionManager } from "./VersionManager.js";
 import { SYMBOLS } from "../../common/di/symbols.js";
-import type { PathResolverService } from "./PathResolverService.js";
-import type { LoggerService } from "./LoggerService.js";
-import type { StreamSnapshotService } from "./sse/StreamSnapshotService.js";
-import type { VersionManager } from "./VersionManager.js";
+import { UnifiedEnv } from "../../common/utils/UnifiedEnv.js";
 
 export interface RemoteVersionInfo {
   version: string;
@@ -31,9 +29,8 @@ export interface UpdateStatus {
 @injectable()
 export class UpdateWorkerService {
   private isChecking = false;
-  private readonly defaultUpdateRepo = "bowen7778/beeswarm";
-  private readonly defaultUpdateChannel = "baseline";
-  private readonly defaultMetadataUrl = `https://github.com/${this.defaultUpdateRepo}/releases/download/${this.defaultUpdateChannel}/latest.json`;
+  private readonly defaultUpdateRepo: string;
+  private readonly defaultUpdateChannel = "stable";
   private lastCheckedAt: string | null = null;
   private lastRemoteInfo: RemoteVersionInfo | null = null;
   private lastPreparedVersion: string | null = null;
@@ -44,7 +41,13 @@ export class UpdateWorkerService {
     @inject(SYMBOLS.LoggerService) private readonly logger: LoggerService,
     @inject(SYMBOLS.StreamSnapshotService) private readonly streamService: StreamSnapshotService,
     @inject(SYMBOLS.VersionManager) private readonly versionManager: VersionManager
-  ) {}
+  ) {
+    this.defaultUpdateRepo = `bowen7778/${this.versionManager.appIdentifier}`;
+  }
+
+  private get metadataUrl(): string {
+    return `https://github.com/${this.defaultUpdateRepo}/releases/download/${this.defaultUpdateChannel}/latest.json`;
+  }
 
   public startUpdateTicking() {
     this.logger.info("Update", "Update worker started.");
@@ -149,9 +152,9 @@ export class UpdateWorkerService {
     }
   }
 
-  private fetchRemoteMetadata(): Promise<RemoteVersionInfo> {
+  private async fetchRemoteMetadata(): Promise<RemoteVersionInfo> {
     return new Promise((resolve, reject) => {
-      https.get(this.getMetadataUrl(), (res) => {
+      https.get(this.metadataUrl, (res) => {
         if (!res.statusCode || res.statusCode >= 400) {
           reject(new Error(`Remote metadata unavailable: HTTP ${res.statusCode || "unknown"}`));
           return;
@@ -227,14 +230,14 @@ export class UpdateWorkerService {
   }
 
   private isDevMode(): boolean {
-    return String(process.env.BEEMCP_IS_DEV || "").trim() === "1";
+    return UnifiedEnv.isDev;
   }
 
   private getMetadataUrl(): string {
-    const custom = String(process.env.BEEMCP_UPDATE_METADATA_URL || "").trim();
+    const custom = UnifiedEnv.get("UPDATE_METADATA_URL");
     if (custom) return custom;
-    const repo = String(process.env.BEEMCP_UPDATE_REPO || "").trim() || this.defaultUpdateRepo;
-    const channel = String(process.env.BEEMCP_UPDATE_CHANNEL || "").trim() || this.defaultUpdateChannel;
+    const repo = UnifiedEnv.get("UPDATE_REPO", this.defaultUpdateRepo);
+    const channel = UnifiedEnv.get("UPDATE_CHANNEL", this.defaultUpdateChannel);
     return `https://github.com/${repo}/releases/download/${channel}/latest.json`;
   }
 

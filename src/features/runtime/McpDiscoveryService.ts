@@ -6,7 +6,7 @@ import { AppConfig } from "./AppConfig.js";
 import { PathResolverService } from "./PathResolverService.js";
 import { RuntimeFsService } from "./RuntimeFsService.js";
 import { SYMBOLS } from "../../common/di/symbols.js";
-import type { VersionManager } from "./VersionManager.js";
+import { VersionManager } from "./VersionManager.js";
 
 type HostSnapshot = {
   pid: number;
@@ -66,28 +66,32 @@ export class McpDiscoveryService {
     const launcher = await this.resolveConnectorLaunch();
     const lock = await RuntimeFsService.readJsonSafe(this.pathResolver.hostLockFile);
     
+    const appIdentifier = this.versionManager.appIdentifier;
+    const appName = this.versionManager.appName;
+
     // Generate minimal config snippet
     const stdioConfig = {
-      beemcp: {
+      [appIdentifier]: {
         command: launcher.command,
         args: launcher.args,
         env: {
           // Do not hardcode project path in global discovery info.
           // Clients will automatically identify based on their own environment when connecting.
-          BEEMCP_PROJECT_ROOT: "" 
+          [`${appIdentifier.toUpperCase()}_PROJECT_ROOT`]: "" 
         }
       }
     };
     
     const sseConfig = {
-      beemcp: {
+      [appIdentifier]: {
         url: `${host.uiBaseUrl}/api/mcp/sse`
       }
     };
 
     const payload = {
       schemaVersion: this.versionManager.getSchemaVersion("mcpDiscovery"),
-      product: "BeeMCP",
+      product: appName,
+      appIdentifier: appIdentifier,
       protocol: "mcp",
       updatedAt: new Date().toISOString(),
       discoveryFile: this.filePath,
@@ -102,8 +106,8 @@ export class McpDiscoveryService {
         lockPid: Number(lock?.pid || 0)
       },
       transports: {
-        stdio: stdioConfig.beemcp,
-        sse: sseConfig.beemcp
+        stdio: stdioConfig[appIdentifier],
+        sse: sseConfig[appIdentifier]
       },
       // Minimal universal config
       universalConfig: {

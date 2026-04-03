@@ -311,16 +311,19 @@ export class HarnessExecutionService {
 
   private async withTimeout<T>(task: Promise<T>, timeoutMs?: number): Promise<T> {
     if (!timeoutMs) return task;
-    return await Promise.race([
-      task,
-      new Promise<T>((_, reject) => {
-        setTimeout(() => {
-          const err: any = new Error("Harness execution timeout");
-          err.code = "HARNESS_TIMEOUT";
-          reject(err);
-        }, timeoutMs);
-      })
-    ]);
+    let timer: NodeJS.Timeout | undefined;
+    const timeoutPromise = new Promise<T>((_, reject) => {
+      timer = setTimeout(() => {
+        const err: any = new Error("Harness execution timeout");
+        err.code = "HARNESS_TIMEOUT";
+        reject(err);
+      }, timeoutMs);
+    });
+    try {
+      return await Promise.race([task, timeoutPromise]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
   }
 
   private throwWithCode(code: string, message: string, details: any = {}): never {

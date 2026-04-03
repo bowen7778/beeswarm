@@ -1,10 +1,10 @@
 import { injectable, inject } from "inversify";
 import fsSync from "node:fs";
 import path from "node:path";
-import process from "node:process";
 import { SYMBOLS } from "../../../common/di/symbols.js";
 import { ProjectStore } from "../stores/ProjectStore.js";
 import { SessionContext } from "../../../common/context/SessionContext.js";
+import { UnifiedEnv } from "../../../common/utils/UnifiedEnv.js";
 
 type RequestLike = {
   headers?: Record<string, unknown>;
@@ -28,7 +28,7 @@ export class ProjectContextService {
   getProjectRoot(): string {
     const activeRoot = SessionContext.projectRoot;
     if (activeRoot) return path.resolve(activeRoot);
-    const root = process.env.BEEMCP_PROJECT_ROOT;
+    const root = UnifiedEnv.get("PROJECT_ROOT");
     if (root) return path.resolve(root);
     return "";
   }

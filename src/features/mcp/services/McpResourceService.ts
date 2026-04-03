@@ -14,9 +14,10 @@ export class McpResourceService {
   ) {}
 
   public registerStateResources(server: McpServer, sessionId: string): void {
+    const prefix = this.versionManager.protocolPrefix;
     server.resource(
       "all-projects",
-      "beemcp://projects/all",
+      `${prefix}://projects/all`,
       async (uri) => {
         const projects = await this.projectStore.listProjects();
         return {
@@ -37,7 +38,7 @@ export class McpResourceService {
 
     server.resource(
       "project-state",
-      "beemcp://projects/{projectId}/state",
+      `${prefix}://projects/{projectId}/state`,
       async (uri, params: any) => {
         const projectId = String(params?.projectId || "");
         const project = this.projectStore.readProjectById(projectId);
@@ -61,8 +62,8 @@ export class McpResourceService {
     );
 
     server.resource(
-      "gateway-status",
-      "beemcp://sessions/active/state",
+      "active-session",
+      `${prefix}://sessions/active/state`,
       async (uri) => {
         const projectId = this.mcpBindingStore.resolveProjectIdByMcpSession(sessionId);
         let projectInfo = projectId ? this.projectStore.readProjectById(projectId) : null;
@@ -80,8 +81,8 @@ export class McpResourceService {
         } else {
           response.state = "UNINITIALIZED";
           response.protocol_status = "RESTRICTED";
-          response.available_actions = ["beemcp_init"];
-          response.instruction = "This session is not yet bound to a project. Please call 'beemcp_init' with 'projectRoot' to establish context.";
+          response.available_actions = [`${prefix}_init`];
+           response.instruction = `This session is not yet bound to a project. Please call '${prefix}_init' with 'projectRoot' to establish context.`;
         }
 
         return {

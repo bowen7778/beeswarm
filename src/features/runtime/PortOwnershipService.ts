@@ -1,11 +1,17 @@
-import { injectable } from "inversify";
+import { injectable, inject } from "inversify";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import process from "node:process";
 import { RuntimeFsService } from "./RuntimeFsService.js";
+import { VersionManager } from "./VersionManager.js";
+import { SYMBOLS } from "../../common/di/symbols.js";
 
 @injectable()
 export class PortOwnershipService {
+  constructor(
+    @inject(SYMBOLS.VersionManager) private readonly versionManager: VersionManager
+  ) {}
+
   private runPowerShell(command: string): string {
     const result = spawnSync("powershell", ["-NoProfile", "-Command", command], {
       encoding: "utf-8",
@@ -116,9 +122,10 @@ export class PortOwnershipService {
   async cleanupZombieProcesses(): Promise<void> {
     if (process.platform !== "win32") return;
     
+    const appIdentifier = this.versionManager.appIdentifier;
     try {
-      // Terminate all processes named beemcp.exe (except current process)
-      const pids = this.runPowerShell(`Get-Process beemcp -ErrorAction SilentlyContinue | Where-Object { $_.Id -ne ${process.pid} } | Select-Object -ExpandProperty Id`).split("\n").map(Number).filter(n => n > 0);
+      // Terminate all processes named after our app (except current process)
+      const pids = this.runPowerShell(`Get-Process ${appIdentifier} -ErrorAction SilentlyContinue | Where-Object { $_.Id -ne ${process.pid} } | Select-Object -ExpandProperty Id`).split("\n").map(Number).filter(n => n > 0);
       
       for (const pid of pids) {
         await this.terminateProcess(pid);
@@ -171,7 +178,8 @@ export class PortOwnershipService {
     if (!lockMatched && !this.looksLikeOurServerCommandLine(cmdline) && !looksLikeBeeByProcess && !lockSuggestsBee) {
       throw new Error(`UI_PORT_IN_USE_BY_FOREIGN_PROCESS:${port}:${ownerPid}`);
     }
-    process.stderr.write(`[UIService] Port ${port} occupied by stale BeeMCP process ${ownerPid}, taking over.\n`);
+    const appName = this.versionManager.appName;
+    process.stderr.write(`[UIService] Port ${port} occupied by stale ${appName} process ${ownerPid}, taking over.\n`);
     const killed = await this.terminateProcess(ownerPid);
     if (!killed) {
       throw new Error(`UI_PORT_TAKEOVER_FAILED:${port}:${ownerPid}`);

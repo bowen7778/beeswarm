@@ -21,10 +21,24 @@ export class MigrationService {
   private readonly hubMigrations: Migration[] = [
     {
       version: 1,
-      description: "Initialize Hub metadata and basic structure",
+      description: "Initialize metadata and legacy migration",
       up: `
-        CREATE TABLE IF NOT EXISTS _schema_metadata (key TEXT PRIMARY KEY, value TEXT);
-        INSERT OR IGNORE INTO _schema_metadata (key, value) VALUES ('version', '0');
+        CREATE TABLE IF NOT EXISTS metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+        -- Migrate from old _schema_metadata if it exists
+        INSERT OR IGNORE INTO metadata (key, value)
+          SELECT 'sys.version', value FROM sqlite_master 
+          JOIN _schema_metadata ON 1=1
+          WHERE sqlite_master.type='table' AND sqlite_master.name='_schema_metadata' AND _schema_metadata.key = 'version';
+        
+        -- Migrate from old metadata schema_version if it exists
+        INSERT OR IGNORE INTO metadata (key, value)
+          SELECT 'sys.version', value FROM metadata 
+          WHERE key = 'schema_version';
+        
+        -- Set default if not exists
+        INSERT OR IGNORE INTO metadata (key, value) VALUES ('sys.version', '0');
+        DROP TABLE IF EXISTS _schema_metadata;
+        DELETE FROM metadata WHERE key = 'schema_version';
       `
     },
     {
@@ -160,12 +174,25 @@ export class MigrationService {
   private readonly projectMigrations: Migration[] = [
     {
       version: 1,
-      description: "Initialize Project database and core tables",
+      description: "Initialize Project database and metadata unification",
       up: `
-        CREATE TABLE IF NOT EXISTS _schema_metadata (key TEXT PRIMARY KEY, value TEXT);
-        INSERT OR IGNORE INTO _schema_metadata (key, value) VALUES ('version', '0');
-        
         CREATE TABLE IF NOT EXISTS metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+        -- Migrate from old _schema_metadata if it exists
+        INSERT OR IGNORE INTO metadata (key, value)
+          SELECT 'sys.version', value FROM sqlite_master 
+          JOIN _schema_metadata ON 1=1
+          WHERE sqlite_master.type='table' AND sqlite_master.name='_schema_metadata' AND _schema_metadata.key = 'version';
+        
+        -- Migrate from old metadata schema_version if it exists
+        INSERT OR IGNORE INTO metadata (key, value)
+          SELECT 'sys.version', value FROM metadata 
+          WHERE key = 'schema_version';
+        
+        -- Set default if not exists
+        INSERT OR IGNORE INTO metadata (key, value) VALUES ('sys.version', '0');
+        DROP TABLE IF EXISTS _schema_metadata;
+        DELETE FROM metadata WHERE key = 'schema_version';
+        
         CREATE TABLE IF NOT EXISTS conversations (id TEXT PRIMARY KEY, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS messages (
           id TEXT PRIMARY KEY, project_id TEXT NOT NULL DEFAULT '', conversation_id TEXT NOT NULL, role TEXT NOT NULL, content TEXT NOT NULL,
@@ -204,11 +231,23 @@ export class MigrationService {
 
     this.logger.info("Database", `[${scopeLabel}] Checking for migrations...`);
 
-    // 1. Ensure _schema_metadata exists
-    db.exec(migrations[0].up);
+    // 1. Ensure metadata table exists and legacy migration is done
+    const initSql = migrations[0].up;
+    const statements = initSql.split(";").map(s => s.trim()).filter(s => s.length > 0);
+    for (const sql of statements) {
+      try {
+        db.exec(sql);
+      } catch (err: any) {
+        if (err.message?.includes("no such table")) {
+          // Ignore "no such table" errors during initial existence check (DROP/SELECT on non-existent tables)
+          continue;
+        }
+        throw err;
+      }
+    }
 
-    // 2. Get current version
-    const row = db.prepare("SELECT value FROM _schema_metadata WHERE key = 'version'").get() as { value: string };
+    // 2. Get current version using standardized key
+    const row = db.prepare("SELECT value FROM metadata WHERE key = 'sys.version'").get() as { value: string };
     let currentVersion = parseInt(row?.value || "0", 10);
 
     // 3. Execute missing migrations in order
@@ -223,22 +262,26 @@ export class MigrationService {
       try {
         db.exec("BEGIN TRANSACTION");
         
-        // 分条执行 DDL，以便捕获特定错误（如列已存在）
+        // Execute DDL statements
         const statements = m.up.split(";").map(s => s.trim()).filter(s => s.length > 0);
         for (const sql of statements) {
           try {
             db.exec(sql);
           } catch (stmtErr: any) {
-            // 如果是“列已存在”错误，在迁移过程中通常可以安全忽略（说明之前初始化过）
-            if (stmtErr.message?.includes("duplicate column name")) {
+            const msg = stmtErr.message?.toLowerCase();
+            if (msg?.includes("duplicate column name")) {
               this.logger.warn("Database", `[${scopeLabel}] Column already exists, skipping: ${sql.substring(0, 50)}...`);
+              continue;
+            }
+            if (msg?.includes("no such table") && (sql.includes("_schema_metadata") || sql.includes("metadata"))) {
+              this.logger.warn("Database", `[${scopeLabel}] Legacy table not found, skipping: ${sql.substring(0, 50)}...`);
               continue;
             }
             throw stmtErr;
           }
         }
 
-        db.prepare("UPDATE _schema_metadata SET value = ? WHERE key = 'version'").run(m.version.toString());
+        db.prepare("UPDATE metadata SET value = ? WHERE key = 'sys.version'").run(m.version.toString());
         db.exec("COMMIT");
         currentVersion = m.version;
       } catch (err: any) {

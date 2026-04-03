@@ -14,6 +14,7 @@ import { LoggerService } from "../../runtime/LoggerService.js";
 import { PathResolverService } from "../../runtime/PathResolverService.js";
 import { SessionContext } from "../../../common/context/SessionContext.js";
 import { MessageEvents } from "./MessageEvents.js";
+import { VersionManager } from "../../runtime/VersionManager.js";
 
 /**
  * Store for managing project-specific message databases and outbox.
@@ -30,7 +31,8 @@ export class MessageManagerStore {
     @inject(SYMBOLS.ProjectIdentityService) private readonly projectIdentity: ProjectIdentityService,
     @inject(SYMBOLS.ProjectStore) private readonly projectStore: ProjectStore,
     @inject(SYMBOLS.RouteStore) private readonly routeStore: RouteStore,
-    @inject(SYMBOLS.MessageEvents) private readonly events: MessageEvents
+    @inject(SYMBOLS.MessageEvents) private readonly events: MessageEvents,
+    @inject(SYMBOLS.VersionManager) private readonly versionManager: VersionManager
   ) {}
 
   /**
@@ -43,7 +45,8 @@ export class MessageManagerStore {
     }
     const info = this.projectIdentity.readProjectInfo(projectRoot);
     if (!info.initialized) {
-      throw new Error(`[MessageManagerStore] Project at ${projectRoot} is not initialized. Please run 'beemcp:init' first.`);
+      const prefix = this.versionManager.protocolPrefix;
+      throw new Error(`[MessageManagerStore] Project at ${projectRoot} is not initialized. Please run '${prefix}_init' first.`);
     }
     try {
       this.ensureProjectDb(projectRoot);

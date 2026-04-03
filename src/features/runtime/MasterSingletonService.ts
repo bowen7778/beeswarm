@@ -2,6 +2,7 @@ import { injectable, inject } from "inversify";
 import fs from "node:fs/promises";
 import fsSync from "node:fs";
 import os from "node:os";
+import path from "node:path";
 import process from "node:process";
 import net from "node:net";
 import { PathResolverService } from "./PathResolverService.js";
@@ -135,6 +136,11 @@ export class MasterSingletonService {
     } else {
       // 2. Attempt to establish physical exclusive lock (leveraging OS filesystem atomicity)
       try {
+        // Ensure parent directory exists before opening file
+        const parentDir = path.dirname(this.lockFile);
+        if (!fsSync.existsSync(parentDir)) {
+          fsSync.mkdirSync(parentDir, { recursive: true });
+        }
         // 'wx' mode: error if file already exists, this is atomic
         const fd = fsSync.openSync(this.lockFile, 'wx');
         this.lockFd = fd;

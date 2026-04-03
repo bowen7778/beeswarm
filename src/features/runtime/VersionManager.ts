@@ -9,12 +9,17 @@ import type { LoggerService } from "./LoggerService.js";
 export interface VersionManifest {
   version: string;
   name: string;
+  identity: {
+    appName: string;
+    appIdentifier: string;
+    protocolPrefix: string;
+  };
   releaseDate: string;
   description: string;
   protocols: {
     mcpServer: string;
     gateway: string;
-    beemcp: string;
+    app: string;
   };
   runtime: {
     node: string;
@@ -40,13 +45,18 @@ export interface VersionInfo {
 export class VersionManager {
   private readonly defaultManifest: VersionManifest = {
     version: "0.0.0",
-    name: "beemcp-kernel",
+    name: "beeswarm-kernel",
+    identity: {
+      appName: "BeeSwarm",
+      appIdentifier: "beeswarm",
+      protocolPrefix: "beeswarm"
+    },
     releaseDate: "",
-    description: "BeeMCP Kernel",
+    description: "BeeSwarm Kernel",
     protocols: {
       mcpServer: "1.2.2",
       gateway: "5.0.0",
-      beemcp: "7.0.0"
+      app: "1.0.0"
     },
     runtime: {
       node: "20.11.1"
@@ -99,12 +109,28 @@ export class VersionManager {
     return this.getCurrentVersionInfo().version;
   }
 
+  public get appName(): string {
+    return this.getManifest().identity?.appName || "BeeSwarm";
+  }
+
+  public get appIdentifier(): string {
+    return this.getManifest().identity?.appIdentifier || "beeswarm";
+  }
+
+  public get protocolPrefix(): string {
+    return this.getManifest().identity?.protocolPrefix || "beeswarm";
+  }
+
   public getManifest(): VersionManifest {
     return this.getCurrentVersionInfo().manifest;
   }
 
-  public getProtocolVersion(key: keyof VersionManifest["protocols"]): string {
-    return this.getManifest().protocols[key];
+  public getProtocolVersion(key: keyof VersionManifest["protocols"] | string): string {
+    const protocols = this.getManifest().protocols;
+    if (key === "app" || key === this.protocolPrefix) {
+      return protocols.app;
+    }
+    return (protocols as any)[key] || "0.0.0";
   }
 
   public getSchemaVersion(key: keyof VersionManifest["schemas"]): number {
@@ -146,6 +172,11 @@ export class VersionManager {
       return {
         version: String(raw?.version || this.defaultManifest.version),
         name: String(raw?.name || this.defaultManifest.name),
+        identity: {
+          appName: String(raw?.identity?.appName || this.defaultManifest.identity.appName),
+          appIdentifier: String(raw?.identity?.appIdentifier || this.defaultManifest.identity.appIdentifier),
+          protocolPrefix: String(raw?.identity?.protocolPrefix || this.defaultManifest.identity.protocolPrefix),
+        },
         releaseDate: String(raw?.releaseDate || this.defaultManifest.releaseDate),
         description: String(raw?.description || this.defaultManifest.description),
         protocols: {

@@ -120,7 +120,7 @@ jobs:
             releases/latest.json
           tag_name: ${{ steps.bundle.outputs.release_tag }}
           target_commitish: ${{ github.sha }}
-          name: BeeMCP Kernel ${{ steps.bundle.outputs.release_tag }}
+          name: BeeSwarm Kernel ${{ steps.bundle.outputs.release_tag }}
           body: |
             channel: ${{ steps.bundle.outputs.channel }}
             version: ${{ steps.bundle.outputs.version }}

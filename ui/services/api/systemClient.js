@@ -1,4 +1,4 @@
-import { apiFetch, invokeDesktopCommand } from './request.js';
+import { apiFetch } from './request.js';
 
 export const systemClient = {
   async fetchMcpDiscovery() {
@@ -18,9 +18,5 @@ export const systemClient = {
       method: 'POST',
       body: payload
     });
-  },
-
-  async restartDesktop() {
-    return await invokeDesktopCommand('ipc_restart_app');
   }
 };

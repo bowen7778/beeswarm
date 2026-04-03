@@ -82,7 +82,7 @@ export class SystemVersionRenderer {
           return `
             <div class="system-slot-item">
               <div class="system-slot-main">
-                <div class="system-slot-label">${escapeHtml(item.manifest?.name || 'beemcp-kernel')}</div>
+                <div class="system-slot-label">${escapeHtml(item.manifest?.name || 'app-kernel')}</div>
                 <div class="system-slot-value">v${escapeHtml(version)}</div>
                 <div class="system-slot-meta">${escapeHtml(releaseDate)}</div>
               </div>

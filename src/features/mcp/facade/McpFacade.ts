@@ -29,7 +29,7 @@ export class McpFacade {
     @inject(McpSessionStore) private readonly sessionStore: McpSessionStore
   ) {
     this.server = new McpServer({
-      name: "BeeMCP",
+      name: this.versionManager.appName,
       version: this.versionManager.getProtocolVersion("mcpServer")
     }, {
       capabilities: { logging: {} },
@@ -43,9 +43,10 @@ export class McpFacade {
    * Get custom instructions for the MCP server.
    */
   private getInstructions(): string {
-    return `BeeMCP Protocol ${this.versionManager.getProtocolVersion("beemcp")}
-You are working in a BeeMCP environment.
-Prioritize using beemcp_orchestrate and beemcp_ask for interactions.
+    const prefix = this.versionManager.protocolPrefix;
+    return `${this.versionManager.appName} Protocol ${this.versionManager.getProtocolVersion(prefix)}
+You are working in a ${this.versionManager.appName} environment.
+Prioritize using ${prefix}_orchestrate and ${prefix}_ask for interactions.
 Please maintain a clear output structure and follow the current session context.`;
   }
 
@@ -72,8 +73,11 @@ Please maintain a clear output structure and follow the current session context.
   async start() {
     if (this.connected) return;
     
-    const { transport } = await this.bus.execute(SYMBOLS.StartMcpServerUsecase, this.server);
-    this.stdioTransport = transport;
+    const result = await this.bus.execute<{ server: McpServer }, { transport: StdioServerTransport }>(
+      SYMBOLS.StartMcpServerUsecase, 
+      { server: this.server }
+    );
+    this.stdioTransport = result.transport;
     try {
       if (!this.stdioTransport) {
         throw new Error("TRANSPORT_INITIALIZATION_FAILED");

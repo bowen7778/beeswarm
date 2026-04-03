@@ -1,6 +1,12 @@
 export default {
-  'app.title': 'BeeMCP Nebula | Orchestrator Control',
-  'hub.title': 'NEBULA',
+  'app.title': 'Orchestrator Nebula | Control Console',
+  'app.version': 'Version',
+  'app.description': 'Model Context Protocol (MCP) Orchestration Kernel',
+  'nav.projects': 'Projects',
+  'nav.hub': 'Conversation Hub',
+  'nav.settings': 'Settings',
+  'nav.im': 'IM Plugins',
+  'hub.title': 'ORCHESTRATOR',
   'hub.new': 'New Project',
   'hub.empty.title': 'No Projects',
   'hub.empty.desc': 'Create a new project environment to start orchestration',
@@ -37,7 +43,8 @@ export default {
   'update.action': 'Update Now',
   
   // IM Plugin Hub
-  'modal.im.title': 'IM Plugin Hub',
+  'modal.im.title': 'IM Plugin Management',
+  'modal.im.desc': 'Configure IM plugins to receive AI orchestration notifications and interact.',
   'modal.im.hub.label': 'Available Plugins',
   'modal.im.back': 'Back to Plugin List',
   'modal.im.feishu.status_label': 'Runtime Status',
@@ -51,6 +58,7 @@ export default {
   'modal.im.feishu.enabled': 'Enable Plugin',
   'modal.im.dingtalk.name': 'DingTalk',
   'modal.im.feishu.name': 'Feishu',
+  'modal.im.feishu.desc': 'Supports Feishu bot long connection mode for real-time orchestration.',
   'modal.im.coming_soon': 'Coming Soon',
   'modal.system.title': 'System Version Details',
   'modal.system.summary': 'Version Summary',

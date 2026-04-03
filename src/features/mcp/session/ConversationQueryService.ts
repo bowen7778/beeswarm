@@ -86,7 +86,7 @@ export class ConversationQueryService {
     const now = new Date().toISOString();
     const content = JSON.stringify(questionItems);
     
-    // Persist to chat history (triggers SSE real-time signal for desktop app components)
+    // Persist to chat history (triggers SSE real-time signal for UI components)
     this.manager.appendMessage({
       conversationId,
       role: "ai",

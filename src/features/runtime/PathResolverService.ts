@@ -2,8 +2,11 @@ import { injectable } from "inversify";
 import path from "node:path";
 import process from "node:process";
 import os from "node:os";
+import fsSync from "node:fs";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
+import { UnifiedEnv } from "../../common/utils/UnifiedEnv.js";
+import { SYMBOLS } from "../../common/di/symbols.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -11,15 +14,34 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export class PathResolverService {
   private readonly _programRoot: string;
   private readonly _userDataRoot: string;
+  private _appIdentifier: string | null = null;
 
   constructor() {
     this._programRoot = this.resolveProgramRoot();
     this._userDataRoot = this.resolveUserDataRoot();
   }
 
+  private get appIdentifier(): string {
+    if (this._appIdentifier) return this._appIdentifier;
+
+    const manifestPath = path.join(this.programRoot, "manifest.json");
+    if (fsSync.existsSync(manifestPath)) {
+      try {
+        const manifest = JSON.parse(fsSync.readFileSync(manifestPath, "utf-8"));
+        this._appIdentifier = manifest.identity?.appIdentifier || "beeswarm";
+        return this._appIdentifier!;
+      } catch {
+        // Fallback
+      }
+    }
+    
+    this._appIdentifier = "beeswarm";
+    return this._appIdentifier;
+  }
+
   private resolveProgramRoot(): string {
-    const isSidecar = process.env.BEESWARM_IS_SIDECAR === "1";
-    const envRoot = String(process.env.BEESWARM_PROGRAM_ROOT || "").trim();
+    const isSidecar = UnifiedEnv.getBool("IS_SIDECAR");
+    const envRoot = UnifiedEnv.get("PROGRAM_ROOT");
     if (envRoot) return path.resolve(envRoot);
 
     // In development environment, if not in Sidecar mode, we need to resolve from the code path
@@ -44,18 +66,19 @@ export class PathResolverService {
   }
 
   private resolveUserDataRoot(): string {
-    const envData = String(process.env.BEESWARM_USER_DATA_DIR || "").trim();
+    const envData = UnifiedEnv.get("USER_DATA_DIR");
     if (envData) return path.resolve(envData);
 
     // 2. Check if local runtime directory exists (Portable Mode / Sandbox Friendly)
-    const localRuntime = path.join(this.programRoot, ".beeswarm-runtime");
-    const fsSync = require("node:fs");
+    const appIdentifier = this.appIdentifier;
+    const localRuntime = path.join(this.programRoot, `.${appIdentifier}-runtime`);
+    
     if (fsSync.existsSync(localRuntime)) {
       return localRuntime;
     }
 
     // 3. Standard system directory
-    const appName = "beeswarm";
+    const appName = appIdentifier;
     const platform = process.platform;
     let standardPath = "";
 
@@ -93,15 +116,18 @@ export class PathResolverService {
   }
 
   get workspaceRoot(): string {
-    return path.resolve(process.env.BEESWARM_PROJECT_ROOT || process.cwd());
+    return path.resolve(UnifiedEnv.get("PROJECT_ROOT", process.cwd()));
   }
 
-  get beeswarmDir(): string {
-    return path.join(this._userDataRoot, "system");
+  /**
+   * Get the system-level application data directory.
+   */
+  get appDataDir(): string {
+    return this.userDataRoot;
   }
 
   get systemDir(): string {
-    return this.beeswarmDir;
+    return this.appDataDir;
   }
 
   /**
@@ -112,11 +138,33 @@ export class PathResolverService {
   }
 
   get configDir(): string {
-    return this.getGlobalConfigDir();
+    return path.join(this.appDataDir, "config");
+  }
+
+  get logDir(): string {
+    return path.join(this.appDataDir, "logs");
+  }
+
+  /**
+   * Get project-specific context directory (e.g., .beeswarm or .mcp)
+   * project config and data strictly follow physical project path
+   */
+  getProjectContextDir(projectRoot: string): string {
+    const resolvedRoot = path.resolve(projectRoot);
+    if (!fsSync.existsSync(resolvedRoot)) {
+      throw new Error(`PROJECT_ROOT_NOT_FOUND:${resolvedRoot}`);
+    }
+    
+    if (resolvedRoot === "/" || resolvedRoot === "C:\\" || resolvedRoot === "c:\\") {
+      throw new Error("FATAL: CANNOT_USE_SYSTEM_ROOT_AS_PROJECT_CONTEXT");
+    }
+
+    const appIdentifier = this.appIdentifier;
+    return path.join(resolvedRoot, `.${appIdentifier}`);
   }
 
   get hostConfigFile(): string {
-    const raw = String(process.env.BEESWARM_HOST_CONFIG_FILE || "").trim();
+    const raw = UnifiedEnv.get("HOST_CONFIG_FILE");
     if (raw) return path.resolve(raw);
     return path.join(this.getGlobalConfigDir(), "host.config.json");
   }
@@ -149,7 +197,8 @@ export class PathResolverService {
   }
 
   /**
-   * Get project-specific .beeswarm directory (project config and data strictly follow physical project path)
+   * Get project-specific data directory (e.g., .beeswarm or .mcp)
+   * project config and data strictly follow physical project path
    */
   getProjectDataDir(projectRoot: string): string {
     const root = String(projectRoot || "").trim();
@@ -167,8 +216,10 @@ export class PathResolverService {
       throw new Error("FATAL: CANNOT_USE_SYSTEM_ROOT_AS_PROJECT_CONTEXT");
     }
 
-    return path.join(resolvedRoot, ".beeswarm");
+    const appIdentifier = this.appIdentifier;
+    return path.join(resolvedRoot, `.${appIdentifier}`);
   }
+
 
   /**
    * Get project-specific database path

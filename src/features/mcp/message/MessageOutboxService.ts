@@ -10,6 +10,7 @@ import { MessageEvents } from "./MessageEvents.js";
 import { IMPluginRegistry } from "../../im/IMPluginRegistry.js";
 import { ProjectStore } from "../stores/ProjectStore.js";
 import { StreamSnapshotService } from "../../runtime/sse/StreamSnapshotService.js";
+import { VersionManager } from "../../runtime/VersionManager.js";
 
 /**
  * Service for managing the message outbox and background delivery to IM.
@@ -29,13 +30,31 @@ export class MessageOutboxService {
     @inject(SYMBOLS.IMPluginRegistry) private readonly pluginRegistry: IMPluginRegistry,
     @inject(SYMBOLS.LoggerService) private readonly logger: LoggerService,
     @inject(SYMBOLS.MessageEvents) private readonly events: MessageEvents,
-    @inject(SYMBOLS.StreamSnapshotService) private readonly streamSnapshotService: StreamSnapshotService
-  ) {}
+    @inject(SYMBOLS.StreamSnapshotService) private readonly streamSnapshotService: StreamSnapshotService,
+    @inject(SYMBOLS.VersionManager) private readonly versionManager: VersionManager
+  ) {
+    this.events.onUserInput(async (payload) => {
+      if (payload.mentions && payload.mentions.length > 0) {
+        const appName = this.versionManager.appName;
+        await this.imService.sendMessage({
+          projectName: payload.projectName || "Unknown",
+          content: `[${appName} 通知] AI 在项目中提到了你，请及时查看处理。`,
+          conversationId: payload.conversationId
+        });
+      }
+    });
+  }
 
-  public initialize(baseDir: string) {}
-  
   private backoffMs(attempt: number): number { 
     return Math.min(30000, 1000 * Math.max(1, 2 ** Math.max(0, attempt - 1))); 
+  }
+
+  /**
+   * Initialize the service.
+   */
+  public initialize(baseDir: string) {
+    // Current implementation does not need baseDir as it uses project-specific databases
+    this.logger.info("OUTBOX", "Service initialized.");
   }
 
   /**
@@ -148,9 +167,14 @@ export class MessageOutboxService {
                 chatId = res.chatId;
                 // Bind route to ensure next time doesn't trigger creation
                 routing.bindConversationChatRoute(project.projectId, provider.providerId, chatId);
-                // Core fix: explicitly persist binding to the project's .beemcp directory
-                await this.imService.bindChatId(chatId, provider.providerId, project.projectRoot);
+                // Core fix: explicitly persist binding to the project's data directory
+                await this.imService.bindChatId({
+                  chatId: res.chatId,
+                  providerId: provider.providerId,
+                  explicitRoot: project.projectRoot
+                });
               }
+
             } catch (createErr: any) {
               this.logger.warn("OUTBOX", `Lazy group creation failed for ${provider.providerId}: ${createErr.message}`);
             }
@@ -163,12 +187,16 @@ export class MessageOutboxService {
         // as it breaks the JSON structure and causes Feishu parsing failure.
         let finalContent = entry.content;
         if (entry.kind !== "interactive") {
+          const appName = this.versionManager.appName;
           if (entry.source === "mcp_reply") {
-            finalContent += "\n\n---\n🤖 *Source: AI Assistant*";
+            finalContent += `\n\n---\n🤖 *Source: ${appName} Assistant*`;
           } else if (entry.source === "ui_send") {
-            finalContent += "\n\n---\n💬 *Source: Desktop App Reply*";
+            finalContent += `\n\n---\n💬 *Source: ${appName} Reply*`;
           }
         }
+
+        // Additional notification for mentions could be added here if needed in the future
+        // using this.versionManager.appName for branding.
 
         try {
           const sendResult = await this.imService.sendMessage(provider.providerId, provider, finalContent, { 
@@ -184,7 +212,11 @@ export class MessageOutboxService {
             if (project) {
               this.logger.info("OUTBOX", `[${provider.providerId}] Group healed during send. Updating route to new chatId: ${sendResult.chatId}`);
               routing.bindConversationChatRoute(project.projectId, provider.providerId, sendResult.chatId);
-              await this.imService.bindChatId(sendResult.chatId, provider.providerId, project.projectRoot);
+              await this.imService.bindChatId({
+                chatId: sendResult.chatId,
+                providerId: provider.providerId,
+                explicitRoot: project.projectRoot
+              });
             }
           }
         } catch (err: any) {

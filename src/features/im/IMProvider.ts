@@ -12,7 +12,7 @@ export interface IMProvider {
   stop?(): Promise<void>;
   status?(): any;
 
-  sendMessage(input: { chatId: string; text: string; credentials: IMCredentials; kind?: string; projectId?: string }): Promise<{ messageId?: string }>;
+  sendMessage(input: { chatId: string; text: string; credentials: IMCredentials; kind?: string; projectId?: string; botId?: string }): Promise<{ messageId?: string }>;
   validateChat?(input: {
     chatId: string;
     credentials: IMCredentials;
@@ -23,6 +23,7 @@ export interface IMProvider {
     credentials: IMCredentials;
     routingPolicy: IMRoutingPolicy;
     forceRecreate?: boolean;
+    botId?: string;
   }): Promise<{ chatId: string }>;
   handleWebhook(payload: any): Promise<any>;
   fetchAttachment(input: {

@@ -15,41 +15,53 @@ export class SendMessageUsecase {
     @inject(IMRuntimeStore) private readonly runtimeStore: IMRuntimeStore
   ) {}
 
-  public async execute(providerId: string, provider: IMProvider, text: string, options?: { chatId?: string; kind?: string; projectId?: string }): Promise<{ chatId: string; messageId?: string }> {
+  /**
+   * Execute message sending.
+   */
+  public async execute(input: {
+    providerId: string;
+    provider: IMProvider;
+    text: string;
+    options?: { chatId?: string; kind?: string; projectId?: string; botId?: string };
+  }): Promise<{ chatId: string; messageId?: string }> {
+    const { providerId, provider, text, options } = input;
+    const { chatId, kind, projectId, botId } = options || {};
     const cfg = await this.configService.readConfig();
     const plugin = cfg.plugins[providerId];
     if (!plugin || !plugin.enabled) {
       throw new Error(`IM plugin ${providerId} is disabled or not found`);
     }
 
+    const bindingInfo = await this.bindingService.readBindingInfo(providerId);
     const credentials = plugin.credentials || {};
-    const boundChatId = await this.bindingService.readBoundChatId(providerId);
     const policy = plugin.routingPolicy || {};
-    const targetChatId = String(options?.chatId || boundChatId || "").trim();
+    const targetChatId = String(chatId || bindingInfo.chatId || "").trim();
+    const targetBotId = botId || bindingInfo.botId || plugin.masterBotId;
 
     if (!targetChatId) {
       if (policy.autoCreateGroup !== false) {
-        const created = await this.createOrBindGroupUsecase.execute(providerId, provider);
+        const created = await this.createOrBindGroupUsecase.execute({ providerId, provider, botId: targetBotId });
         const sent = await provider.sendMessage({ 
           chatId: created.chatId, 
           text, 
           credentials,
-          kind: options?.kind,
-          projectId: options?.projectId
+          kind,
+          projectId,
+          botId: targetBotId
         });
         return { chatId: created.chatId, messageId: sent?.messageId };
       }
       throw new Error("IM group not bound");
     }
 
-    // Validation and sending logic... (omitted for brevity but can be fully implemented)
     try {
       const sent = await provider.sendMessage({ 
         chatId: targetChatId, 
         text, 
         credentials,
-        kind: options?.kind,
-        projectId: options?.projectId
+        kind,
+        projectId,
+        botId: targetBotId
       });
       return { chatId: targetChatId, messageId: sent?.messageId };
     } catch (err: any) {

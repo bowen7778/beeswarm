@@ -24,7 +24,8 @@ export class StartMcpServerUsecase {
   /**
    * Execute the MCP server startup logic.
    */
-  public execute(server: McpServer): { transport: StdioServerTransport; context: SessionContextPayload } {
+  public execute(input: { server: McpServer }): { transport: StdioServerTransport; context: SessionContextPayload } {
+    const { server } = input;
     const stdioContext: SessionContextPayload = { 
       sessionId: "stdio-session", 
       projectRoot: AppConfig.projectRoot() || ""

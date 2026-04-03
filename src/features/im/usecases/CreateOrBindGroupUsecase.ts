@@ -18,7 +18,12 @@ export class CreateOrBindGroupUsecase {
     @inject(IMRuntimeStore) private readonly runtimeStore: IMRuntimeStore
   ) {}
 
-  public async execute(providerId: string, provider: IMProvider, forceRecreate: boolean = false): Promise<{ chatId: string }> {
+  /**
+   * Execute the group binding or creation.
+   */
+  public async execute(input: { providerId: string; provider: IMProvider; forceRecreate?: boolean; botId?: string }): Promise<{ chatId: string }> {
+    const { providerId, provider, forceRecreate = false, botId } = input;
+    this.logger.info("IM", `[${providerId}] Binding/Creating group...`);
     try {
       const projectRoot = this.projectContext.getProjectRoot();
       if (!projectRoot) {
@@ -26,9 +31,9 @@ export class CreateOrBindGroupUsecase {
         throw new Error("PROJECT_CONTEXT_REQUIRED_FOR_IM_BINDING");
       }
 
-      if (!forceRecreate) {
-        const chatId = await this.bindingService.readBoundChatId(providerId);
-        if (chatId) return { chatId };
+      const bindingInfo = await this.bindingService.readBindingInfo(providerId);
+      if (!forceRecreate && bindingInfo.chatId) {
+        return { chatId: bindingInfo.chatId };
       }
 
       const cfg = await this.configService.readConfig();
@@ -37,15 +42,22 @@ export class CreateOrBindGroupUsecase {
 
       const projectName = path.basename(projectRoot) || "project";
       const projectId = providerId + "-" + projectName.toLowerCase();
+      
       const result = await provider.createOrBindGroup({
         projectId,
         projectName,
         credentials: plugin.credentials || {},
         routingPolicy: plugin.routingPolicy || {},
-        forceRecreate
+        forceRecreate,
+        botId: botId || bindingInfo.botId
       });
       
-      await this.bindingService.bindChatId(result.chatId, providerId);
+      await this.bindingService.bindChatId({
+        chatId: result.chatId,
+        providerId,
+        botId: botId || bindingInfo.botId,
+        explicitRoot: projectRoot
+      });
       return result;
     } catch (err: any) {
       this.runtimeStore.touchStatus(providerId, { lastError: err?.message || "bind_failed" });

@@ -5,7 +5,6 @@ import process from "node:process";
 import { SYMBOLS } from "../../../common/di/symbols.js";
 import { MessageEvents } from "../message/MessageEvents.js";
 import { MessageManagerStore } from "../message/MessageManagerStore.js";
-import { WindowService } from "../../runtime/WindowService.js";
 import { ProjectIdentityService } from "../project/ProjectIdentityService.js";
 import { SessionContext, SessionContextPayload } from "../../../common/context/SessionContext.js";
 import { ProjectStore } from "../stores/ProjectStore.js";
@@ -41,21 +40,24 @@ export class ToolRegistryService {
     @inject(SYMBOLS.ProjectStore) private readonly projectStore: ProjectStore,
     @inject(SYMBOLS.MessageEvents) private readonly events: MessageEvents,
     @inject(SYMBOLS.ConversationQueryService) private readonly queryService: ConversationQueryService,
-    @inject(SYMBOLS.WindowService) private readonly window: WindowService,
     @inject(SYMBOLS.MessageManagerStore) private readonly manager: MessageManagerStore,
     @inject(SYMBOLS.MessageOutboxService) private readonly outbox: any,
-    @inject(SYMBOLS.ProjectIdentityService) private readonly projectIdentity: ProjectIdentityService
+    @inject(SYMBOLS.ProjectIdentityService) private readonly projectIdentity: ProjectIdentityService,
+    @inject(SYMBOLS.VersionManager) private readonly versionManager: VersionManager
   ) {}
 
   public apply(server: McpServer, context: SessionContextPayload) {
-    if ((server as any)._beemcp_tools_applied) return;
-    (server as any)._beemcp_tools_applied = true;
+    const prefix = this.versionManager.protocolPrefix;
+    const appName = this.versionManager.appName;
 
-    // beemcp_init
+    if ((server as any)._tools_applied) return;
+    (server as any)._tools_applied = true;
+
+    // init
     server.registerTool(
-      "beemcp_init",
+      `${prefix}_init`,
       {
-        description: "Initialize a new BeeMCP territory. MUST be called first when project state is UNINITIALIZED.",
+        description: `Initialize a new ${appName} territory. MUST be called first when project state is UNINITIALIZED.`,
         inputSchema: {
           projectRoot: z.string().describe("Absolute physical path of the project root.")
         }
@@ -73,18 +75,18 @@ export class ToolRegistryService {
             text: JSON.stringify({
               status: "INITIALIZED",
               projectId: identity.projectId,
-              instruction: "Connection established. You MUST now call 'beemcp_orchestrate' immediately to start the communication loop."
+              instruction: `Connection established. You MUST now call '${prefix}_orchestrate' immediately to start the communication loop.`
             })
           }]
         };
       }
     );
 
-    // beemcp_orchestrate
+    // orchestrate
     server.registerTool(
-      "beemcp_orchestrate",
+      `${prefix}_orchestrate`,
       {
-        description: "Synchronize AI state and listen for user input. This is the UNIFIED tool for communication. It sends your reply and blocks until user input is received.",
+        description: `${appName} main loop: send logs, status updates, and wait for user interactions.`,
         inputSchema: z.object({
           reply: z.string().optional().describe("Your response message to the user.")
         })
@@ -94,11 +96,11 @@ export class ToolRegistryService {
       }
     );
 
-    // beemcp_ask
+    // ask
     server.registerTool(
-      "beemcp_ask",
+      `${prefix}_ask`,
       {
-        description: "Send structured questions (select, input, confirm) to the user via BeeMCP desktop window. Blocks until answered.",
+        description: `Send structured questions (select, input, confirm) to the user via ${appName} web interface. Blocks until answered.`,
         inputSchema: z.object({
           questions: z.array(z.object({
             id: z.string().describe("Unique ID for the question"),
@@ -116,15 +118,15 @@ export class ToolRegistryService {
     server.registerPrompt(
       "start_bridge",
       {
-        title: "Activate MCP Bridge Interaction",
-        description: "Activate BeeMCP managed mode, please check beemcp://sessions/active/state first."
+        title: `Activate MCP Bridge Interaction`,
+        description: `Activate ${appName} managed mode, please check ${prefix}://sessions/active/state first.`
       },
       () => ({
         messages: [{
           role: "user",
           content: {
             type: "text",
-            text: "Please check beemcp://sessions/active/state and follow its instructions to sync reply."
+            text: `Please check ${prefix}://sessions/active/state and follow its instructions to sync reply.`
           }
         }]
       })
@@ -140,12 +142,13 @@ export class ToolRegistryService {
     let projectRoot = projectId ? this.projectStore.resolveProjectRootByProjectId(projectId) : null;
 
     if (!projectId || !projectRoot) {
+      const prefix = this.versionManager.protocolPrefix;
       return {
         content: [{
           type: "text",
           text: JSON.stringify({
             status: "HANDSHAKE_REQUIRED",
-            instruction: "Connection not bound. Please call 'beemcp_init' first."
+            instruction: `Connection not bound. Please call '${prefix}_init' first.`
           })
         }]
       };
@@ -163,7 +166,6 @@ export class ToolRegistryService {
         }
 
         this.events.emitUIFocusProject(projectId!);
-        this.window.openDesktopWindow(true);
 
         const results = await new Promise<any[]>((resolve) => {
           let isResolved = false;

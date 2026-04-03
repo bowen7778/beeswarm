@@ -5,6 +5,7 @@ import { PathResolverService } from "./PathResolverService.js";
 import { LoggerService } from "./LoggerService.js";
 import { SYMBOLS } from "../../common/di/symbols.js";
 import type { VersionManager } from "./VersionManager.js";
+import { UnifiedEnv } from "../../common/utils/UnifiedEnv.js";
 
 export type HostConfig = {
   schemaVersion: number;
@@ -12,9 +13,7 @@ export type HostConfig = {
     instanceMode: "attach" | "exit-if-running";
     uiHost: string;
     uiPort: number;
-    autoOpenDesktopWindow: boolean;
-    windowOpenMaxAttempts: number;
-    windowOpenRetryMs: number;
+    autoOpenBrowser: boolean;
   };
   logging: {
     level: string;
@@ -27,12 +26,12 @@ export class AppConfig {
   private config: HostConfig;
 
   static projectRoot(): string {
-    const envRoot = String(process.env.BEESWARM_PROJECT_ROOT || "").trim();
+    const envRoot = UnifiedEnv.get("PROJECT_ROOT");
     return envRoot ? path.resolve(envRoot) : "";
   }
 
   static programRoot(): string {
-    const envRoot = String(process.env.BEESWARM_PROGRAM_ROOT || "").trim();
+    const envRoot = UnifiedEnv.get("PROGRAM_ROOT");
     if (envRoot) return path.resolve(envRoot);
 
     const entry = String(process.argv[1] || "").trim();
@@ -69,9 +68,7 @@ export class AppConfig {
         instanceMode: "attach",
         uiHost: "127.0.0.1",
         uiPort: 3000,
-        autoOpenDesktopWindow: true,
-        windowOpenMaxAttempts: 3,
-        windowOpenRetryMs: 2500
+        autoOpenBrowser: true
       },
       logging: {
         level: "info"
@@ -119,15 +116,15 @@ export class AppConfig {
   }
 
   get uiPort(): number {
-    return Number(process.env.UI_PORT || this.config.runtime.uiPort || 3000);
+    return UnifiedEnv.getNumber("UI_PORT", this.config.runtime.uiPort || 3000);
   }
 
   get uiHost(): string {
-    return process.env.UI_HOST || this.config.runtime.uiHost || "127.0.0.1";
+    return UnifiedEnv.get("UI_HOST", this.config.runtime.uiHost || "127.0.0.1");
   }
 
-  get autoOpenDesktopWindow(): boolean {
-    return this.config.runtime.autoOpenDesktopWindow;
+  get autoOpenBrowser(): boolean {
+    return this.config.runtime.autoOpenBrowser;
   }
 
   get logLevel(): string {
@@ -135,7 +132,7 @@ export class AppConfig {
   }
 
   get harnessApiToken(): string {
-    return String(process.env.BEEMCP_HARNESS_API_TOKEN || "").trim();
+    return UnifiedEnv.get("HARNESS_API_TOKEN");
   }
 
   get harnessAuthEnabled(): boolean {
@@ -143,8 +140,7 @@ export class AppConfig {
   }
 
   get harnessGateMinSuccessRate(): number {
-    const raw = Number(process.env.BEEMCP_HARNESS_GATE_MIN_SUCCESS_RATE || "0.85");
-    if (!Number.isFinite(raw)) return 0.85;
+    const raw = UnifiedEnv.getNumber("HARNESS_GATE_MIN_SUCCESS_RATE", 0.85);
     return Math.min(1, Math.max(0, raw));
   }
 }

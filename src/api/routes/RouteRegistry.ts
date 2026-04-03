@@ -1,6 +1,7 @@
 import { injectable, inject } from "inversify";
 import express from "express";
 import path from "node:path";
+import fsSync from "node:fs";
 import { timingSafeEqual } from "node:crypto";
 import { SYMBOLS } from "../../common/di/symbols.js";
 import { IMController } from "../controllers/IMController.js";
@@ -13,6 +14,7 @@ import { HarnessController } from "../controllers/HarnessController.js";
 import { StaticAssetService } from "../../features/runtime/StaticAssetService.js";
 import { LoggerService } from "../../features/runtime/LoggerService.js";
 import { AppConfig } from "../../features/runtime/AppConfig.js";
+import { VersionManager } from "../../features/runtime/VersionManager.js";
 import { McpSSEBridgeService } from "../../features/runtime/sse/mcp/McpSSEBridgeService.js";
 
 @injectable()
@@ -38,7 +40,9 @@ export class RouteRegistry {
     @inject(SYMBOLS.McpSSEBridgeService) private readonly mcpSSEBridge: McpSSEBridgeService,
     @inject(SYMBOLS.StaticAssetService) private readonly staticAssets: StaticAssetService,
     @inject(SYMBOLS.LoggerService) private readonly logger: LoggerService,
-    @inject(SYMBOLS.AppConfig) private readonly config: AppConfig
+    @inject(SYMBOLS.AppConfig) private readonly config: AppConfig,
+    @inject(SYMBOLS.PathResolverService) private readonly pathResolver: PathResolverService,
+    @inject(SYMBOLS.VersionManager) private readonly versionManager: VersionManager
   ) {}
 
   register(app: express.Express, statusProvider?: () => any) {
@@ -46,12 +50,18 @@ export class RouteRegistry {
       this.monitorController.setHostStatusProvider(statusProvider);
     }
 
+    // [ABSOLUTE TOP] Debugging all incoming traffic
+    app.use((req, res, next) => {
+      process.stderr.write(`[TRAFFIC] ${req.method} ${req.url}\n`);
+      next();
+    });
+
     const mcpMessagesPath = "/api/mcp/sse/messages";
     const webhookPath = "/api/im/webhook";
     
     // Global logging middleware
     app.use((req, res, next) => {
-      this.logger.info("HTTP", `${req.method} ${req.url}`);
+      this.logger.info("HTTP", `${req.method} ${req.url} (Origin: ${req.headers.origin || 'none'})`);
       next();
     });
 
@@ -121,6 +131,10 @@ export class RouteRegistry {
     // --- IM Routes ---
     app.get("/api/im/config", (req, res) => this.imController.getConfig(req, res));
     app.post("/api/im/config", (req, res) => this.imController.saveConfig(req, res));
+    app.post("/api/im/bot/add", (req, res) => this.imController.addBotInstance(req, res));
+    app.post("/api/im/bot/remove", (req, res) => this.imController.removeBotInstance(req, res));
+    app.post("/api/im/bot/update", (req, res) => this.imController.updateBotInstance(req, res));
+    app.post("/api/im/bot/set_master", (req, res) => this.imController.setMasterBot(req, res));
     app.get("/api/im/status", (req, res) => this.imController.getStatus(req, res));
     app.get("/api/im/outbox/dead", (req, res) => this.imController.listOutboxDead(req, res));
     app.post("/api/im/outbox/replay_dead", (req, res) => this.imController.replayOutboxDead(req, res));
@@ -174,20 +188,65 @@ export class RouteRegistry {
 
     app.get("/api/stream", (req, res) => this.monitorController.handleStream(req, res));
 
+    // --- Identity & Manifest ---
+     app.get("/manifest.json", (req, res) => {
+       const manifestPath = path.join(this.pathResolver.programRoot, "manifest.json");
+       if (fsSync.existsSync(manifestPath)) {
+         try {
+           const content = fsSync.readFileSync(manifestPath, "utf-8");
+           res.setHeader("Content-Type", "application/json");
+           res.send(content);
+         } catch (err) {
+           res.status(500).json({ error: "FAILED_TO_READ_MANIFEST" });
+         }
+       } else {
+         res.status(404).json({ error: "MANIFEST_NOT_FOUND" });
+       }
+     });
+
     // Static Assets
     const staticDir = this.staticAssets.staticDir;
-    app.use(express.static(staticDir));
+    const isDev = process.env.NODE_ENV === 'development' || process.env[`${this.versionManager.appIdentifier.toUpperCase()}_IS_DEV`] === '1';
     
-    // SPA Fallback: only handle non-api routes that don't contain extensions (dots)
-    app.get(/^\/(?!api)[^.]*$/, (req, res) => {
-      res.sendFile(path.join(staticDir, "index.html"));
+    if (isDev) {
+      // Disable caching for static assets in development to ensure HMR/Refreshes work
+      app.use((req, res, next) => {
+        if (req.url.startsWith('/api')) return next();
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
+        res.setHeader('Surrogate-Control', 'no-store');
+        next();
+      });
+    }
+
+    app.use(express.static(staticDir, isDev ? { etag: false } : undefined));
+    
+    // SPA Fallback: handle all non-api routes
+    app.get(/^\/(?!api).*$/, (req, res) => {
+      const indexPath = path.join(staticDir, "index.html");
+      if (fsSync.existsSync(indexPath)) {
+        res.sendFile(indexPath);
+      } else {
+        res.status(404).send("UI not found. If this is a dev server, use port 5173.");
+      }
     });
   }
 
   private resolveAllowedOrigin(origin?: string): string {
     const value = String(origin || "").trim();
     if (!value) return "*";
-    if (value === "tauri://localhost") return value;
+    
+    // In development, allow all local origins to prevent CORS errors during HMR
+      const appIdentifier = this.versionManager.appIdentifier;
+      const isDev = process.env.NODE_ENV === 'development' || process.env[`${appIdentifier.toUpperCase()}_IS_DEV`] === '1';
+      if (isDev) {
+      if (/^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/i.test(value)) {
+        return value;
+      }
+    }
+
+    if (value === "http://localhost:5173" || value === "http://127.0.0.1:5173") return value;
     if (/^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/i.test(value)) return value;
     return `http://${this.config.uiHost}:${this.config.uiPort}`;
   }

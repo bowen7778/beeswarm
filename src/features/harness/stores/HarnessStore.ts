@@ -3,20 +3,25 @@ import { randomUUID } from "node:crypto";
 import { SYMBOLS } from "../../../common/di/symbols.js";
 import { DatabaseService } from "../../runtime/DatabaseService.js";
 import { PathResolverService } from "../../runtime/PathResolverService.js";
+import { BaseRepository } from "../../runtime/BaseRepository.js";
+import { LoggerService } from "../../runtime/LoggerService.js";
 
 @injectable()
-export class HarnessStore {
+export class HarnessStore extends BaseRepository {
   constructor(
-    @inject(SYMBOLS.DatabaseService) private readonly dbService: DatabaseService,
-    @inject(SYMBOLS.PathResolverService) private readonly pathResolver: PathResolverService
-  ) {}
+    @inject(SYMBOLS.DatabaseService) dbService: DatabaseService,
+    @inject(SYMBOLS.PathResolverService) private readonly pathResolver: PathResolverService,
+    @inject(SYMBOLS.LoggerService) logger: LoggerService
+  ) {
+    super(dbService, logger);
+  }
 
-  private get db() {
-    return this.dbService.getConnection(this.pathResolver.hubDbPath);
+  protected getDbPath(): string {
+    return this.pathResolver.hubDbPath;
   }
 
   public readProjectModeConfig(projectId: string) {
-    const row = this.db.prepare(`
+    const row = this.queryOne<any>(`
       SELECT
         project_id as projectId,
         project_mode as projectMode,
@@ -30,7 +35,7 @@ export class HarnessStore {
       FROM projects
       WHERE project_id = ?
       LIMIT 1
-    `).get(projectId) as any;
+    `, [projectId]);
     if (!row) return null;
     return {
       projectId: String(row.projectId || ""),
@@ -59,11 +64,11 @@ export class HarnessStore {
     const projectId = String(input.projectId || "").trim();
     if (!runId || !projectId) return;
     const startedAt = String(input.startedAt || new Date().toISOString());
-    this.db.prepare(`
+    this.run(`
       INSERT INTO harness_runs(
         run_id, project_id, trace_id, mode, channel, intent, status, input_payload, started_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
+    `, [
       runId,
       projectId,
       String(input.traceId || ""),
@@ -73,7 +78,7 @@ export class HarnessStore {
       "running",
       JSON.stringify(input.payload || {}),
       startedAt
-    );
+    ]);
   }
 
   public completeHarnessRun(input: {
@@ -86,28 +91,28 @@ export class HarnessStore {
   }) {
     const runId = String(input.runId || "").trim();
     if (!runId) return;
-    this.db.prepare(`
+    this.run(`
       UPDATE harness_runs
       SET status = ?, output_payload = ?, error_code = ?, error_message = ?, ended_at = ?
       WHERE run_id = ?
-    `).run(
+    `, [
       String(input.status || "failed"),
       JSON.stringify(input.outputPayload || {}),
       String(input.errorCode || ""),
       String(input.errorMessage || ""),
       String(input.endedAt || new Date().toISOString()),
       runId
-    );
+    ]);
   }
 
   public runInTransaction<T>(operation: () => T): T {
-    this.db.exec("BEGIN TRANSACTION");
+    this.run("BEGIN TRANSACTION");
     try {
       const result = operation();
-      this.db.exec("COMMIT");
+      this.run("COMMIT");
       return result;
     } catch (err) {
-      this.db.exec("ROLLBACK");
+      this.run("ROLLBACK");
       throw err;
     }
   }
@@ -124,11 +129,11 @@ export class HarnessStore {
   }) {
     const runId = String(input.runId || "").trim();
     if (!runId) return;
-    this.db.prepare(`
+    this.run(`
       INSERT INTO harness_steps(
         step_id, run_id, trace_id, project_id, layer, event_type, confidence, payload, created_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
+    `, [
       randomUUID(),
       runId,
       String(input.traceId || ""),
@@ -138,20 +143,20 @@ export class HarnessStore {
       String(input.confidence || "high"),
       JSON.stringify(input.payload || {}),
       String(input.createdAt || new Date().toISOString())
-    );
+    ]);
   }
 
   public listHarnessStepsByTrace(traceId: string, limit: number = 200, offset: number = 0): any[] {
     const id = String(traceId || "").trim();
     if (!id) return [];
-    const rows = this.db.prepare(`
+    const rows = this.queryAll<any>(`
       SELECT run_id, trace_id, project_id, layer, event_type, confidence, payload, created_at
       FROM harness_steps
       WHERE trace_id = ?
       ORDER BY created_at ASC
       LIMIT ?
       OFFSET ?
-    `).all(id, Math.max(1, Math.min(1000, limit)), Math.max(0, Math.floor(offset))) as any[];
+    `, [id, Math.max(1, Math.min(1000, limit)), Math.max(0, Math.floor(offset))]);
     return rows.map((x) => ({
       runId: String(x.run_id || ""),
       traceId: String(x.trace_id || ""),
@@ -167,14 +172,14 @@ export class HarnessStore {
   public listHarnessRuns(projectId: string, limit: number = 50, offset: number = 0): any[] {
     const id = String(projectId || "").trim();
     if (!id) return [];
-    const rows = this.db.prepare(`
+    const rows = this.queryAll<any>(`
       SELECT run_id, project_id, trace_id, mode, channel, intent, status, input_payload, output_payload, error_code, error_message, started_at, ended_at
       FROM harness_runs
       WHERE project_id = ?
       ORDER BY started_at DESC
       LIMIT ?
       OFFSET ?
-    `).all(id, Math.max(1, Math.min(500, limit)), Math.max(0, Math.floor(offset))) as any[];
+    `, [id, Math.max(1, Math.min(500, limit)), Math.max(0, Math.floor(offset))]);
     return rows.map((x) => ({
       runId: String(x.run_id || ""),
       projectId: String(x.project_id || ""),
@@ -206,11 +211,11 @@ export class HarnessStore {
   }) {
     const evalId = String(input.evalId || "").trim();
     if (!evalId) return;
-    this.db.prepare(`
+    this.run(`
       INSERT INTO harness_eval_reports(
         eval_id, project_id, mode, channel, trace_id, total_cases, passed_cases, success_rate, report_payload, created_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
+    `, [
       evalId,
       String(input.projectId || ""),
       String(input.mode || ""),
@@ -221,13 +226,13 @@ export class HarnessStore {
       Number(input.successRate || 0),
       JSON.stringify(input.reportPayload || {}),
       String(input.createdAt || new Date().toISOString())
-    );
+    ]);
   }
 
   public readHarnessEvalReport(evalId: string): any | null {
     const id = String(evalId || "").trim();
     if (!id) return null;
-    const row = this.db.prepare(`SELECT * FROM harness_eval_reports WHERE eval_id = ? LIMIT 1`).get(id) as any;
+    const row = this.queryOne<any>(`SELECT * FROM harness_eval_reports WHERE eval_id = ? LIMIT 1`, [id]);
     if (!row) return null;
     return {
       evalId: String(row.eval_id || ""),
@@ -253,24 +258,24 @@ export class HarnessStore {
   }) {
     const replayId = String(input.replayId || "").trim();
     if (!replayId) return;
-    this.db.prepare(`
+    this.run(`
       INSERT INTO harness_replay_records(
         replay_id, project_id, source_trace_id, policy_version, replay_payload, created_at
       ) VALUES (?, ?, ?, ?, ?, ?)
-    `).run(
+    `, [
       replayId,
       String(input.projectId || ""),
       String(input.sourceTraceId || ""),
       String(input.policyVersion || ""),
       JSON.stringify(input.replayPayload || {}),
       String(input.createdAt || new Date().toISOString())
-    );
+    ]);
   }
 
   public readHarnessReplayRecord(replayId: string): any | null {
     const id = String(replayId || "").trim();
     if (!id) return null;
-    const row = this.db.prepare(`SELECT * FROM harness_replay_records WHERE replay_id = ? LIMIT 1`).get(id) as any;
+    const row = this.queryOne<any>(`SELECT * FROM harness_replay_records WHERE replay_id = ? LIMIT 1`, [id]);
     if (!row) return null;
     return {
       replayId: String(row.replay_id || ""),
@@ -294,11 +299,11 @@ export class HarnessStore {
   }) {
     const gateId = String(input.gateId || "").trim();
     if (!gateId) return;
-    this.db.prepare(`
+    this.run(`
       INSERT INTO harness_gate_results(
         gate_id, eval_id, project_id, passed, score, reason, result_payload, created_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
+    `, [
       gateId,
       String(input.evalId || ""),
       String(input.projectId || ""),
@@ -307,7 +312,7 @@ export class HarnessStore {
       String(input.reason || ""),
       JSON.stringify(input.resultPayload || {}),
       String(input.createdAt || new Date().toISOString())
-    );
+    ]);
   }
 
   public appendHarnessMetric(input: {
@@ -321,11 +326,11 @@ export class HarnessStore {
   }) {
     const runId = String(input.runId || "").trim();
     if (!runId) return;
-    this.db.prepare(`
+    this.run(`
       INSERT INTO harness_metrics(
         metric_id, run_id, project_id, trace_id, metric_name, metric_value, metric_payload, created_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
+    `, [
       randomUUID(),
       runId,
       String(input.projectId || ""),
@@ -334,7 +339,7 @@ export class HarnessStore {
       Number(input.metricValue || 0),
       JSON.stringify(input.metricPayload || {}),
       String(input.createdAt || new Date().toISOString())
-    );
+    ]);
   }
 
   public listHarnessMetrics(input: {
@@ -350,22 +355,22 @@ export class HarnessStore {
     const offset = Math.max(0, Math.floor(Number(input.offset || 0)));
     const byTrace = traceId.length > 0;
     const rows = byTrace
-      ? this.db.prepare(`
+      ? this.queryAll<any>(`
         SELECT metric_id, run_id, project_id, trace_id, metric_name, metric_value, metric_payload, created_at
         FROM harness_metrics
         WHERE project_id = ? AND trace_id = ?
         ORDER BY created_at DESC
         LIMIT ?
         OFFSET ?
-      `).all(projectId, traceId, limit, offset) as any[]
-      : this.db.prepare(`
+      `, [projectId, traceId, limit, offset])
+      : this.queryAll<any>(`
         SELECT metric_id, run_id, project_id, trace_id, metric_name, metric_value, metric_payload, created_at
         FROM harness_metrics
         WHERE project_id = ?
         ORDER BY created_at DESC
         LIMIT ?
         OFFSET ?
-      `).all(projectId, limit, offset) as any[];
+      `, [projectId, limit, offset]);
     return rows.map((x) => ({
       metricId: String(x.metric_id || ""),
       runId: String(x.run_id || ""),
@@ -390,11 +395,11 @@ export class HarnessStore {
   }) {
     const runId = String(input.runId || "").trim();
     if (!runId) return;
-    this.db.prepare(`
+    this.run(`
       INSERT INTO harness_failures(
         failure_id, run_id, project_id, trace_id, error_code, error_class, failure_stage, failure_payload, created_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
+    `, [
       randomUUID(),
       runId,
       String(input.projectId || ""),
@@ -404,7 +409,7 @@ export class HarnessStore {
       String(input.failureStage || ""),
       JSON.stringify(input.failurePayload || {}),
       String(input.createdAt || new Date().toISOString())
-    );
+    ]);
   }
 
   public listHarnessFailures(input: {
@@ -420,22 +425,22 @@ export class HarnessStore {
     const offset = Math.max(0, Math.floor(Number(input.offset || 0)));
     const byTrace = traceId.length > 0;
     const rows = byTrace
-      ? this.db.prepare(`
+      ? this.queryAll<any>(`
         SELECT failure_id, run_id, project_id, trace_id, error_code, error_class, failure_stage, failure_payload, created_at
         FROM harness_failures
         WHERE project_id = ? AND trace_id = ?
         ORDER BY created_at DESC
         LIMIT ?
         OFFSET ?
-      `).all(projectId, traceId, limit, offset) as any[]
-      : this.db.prepare(`
+      `, [projectId, traceId, limit, offset])
+      : this.queryAll<any>(`
         SELECT failure_id, run_id, project_id, trace_id, error_code, error_class, failure_stage, failure_payload, created_at
         FROM harness_failures
         WHERE project_id = ?
         ORDER BY created_at DESC
         LIMIT ?
         OFFSET ?
-      `).all(projectId, limit, offset) as any[];
+      `, [projectId, limit, offset]);
     return rows.map((x) => ({
       failureId: String(x.failure_id || ""),
       runId: String(x.run_id || ""),

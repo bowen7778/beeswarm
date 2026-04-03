@@ -3,30 +3,32 @@ import { SYMBOLS } from "../../../common/di/symbols.js";
 import { DatabaseService } from "../../runtime/DatabaseService.js";
 import { PathResolverService } from "../../runtime/PathResolverService.js";
 import { MessageEvents } from "../message/MessageEvents.js";
+import { BaseRepository } from "../../runtime/BaseRepository.js";
+import { LoggerService } from "../../runtime/LoggerService.js";
 
 /**
  * Store for managing bindings between MCP session IDs and project IDs.
  */
 @injectable()
-export class McpSessionBindingStore {
+export class McpSessionBindingStore extends BaseRepository {
   constructor(
-    @inject(SYMBOLS.DatabaseService) private readonly dbService: DatabaseService,
+    @inject(SYMBOLS.DatabaseService) dbService: DatabaseService,
     @inject(SYMBOLS.PathResolverService) private readonly pathResolver: PathResolverService,
-    @inject(SYMBOLS.MessageEvents) private readonly events: MessageEvents
-  ) {}
+    @inject(SYMBOLS.MessageEvents) private readonly events: MessageEvents,
+    @inject(SYMBOLS.LoggerService) logger: LoggerService
+  ) {
+    super(dbService, logger);
+  }
 
-  /**
-   * Get the database connection for the Hub.
-   */
-  private get db() {
-    return this.dbService.getConnection(this.pathResolver.hubDbPath);
+  protected getDbPath(): string {
+    return this.pathResolver.hubDbPath;
   }
 
   /**
    * List all project IDs that have active MCP session bindings.
    */
   public listConnectedProjectIds(): string[] {
-    const rows = this.db.prepare(`SELECT DISTINCT project_id FROM mcp_session_bindings`).all() as any[];
+    const rows = this.queryAll<any>(`SELECT DISTINCT project_id FROM mcp_session_bindings`);
     return rows.map(r => String(r.project_id));
   }
 
@@ -38,7 +40,7 @@ export class McpSessionBindingStore {
     const pid = String(projectId || "").trim();
     if (!sid || !pid) return;
     const now = new Date().toISOString();
-    this.db.prepare(`INSERT INTO mcp_session_bindings(session_id, project_id, updated_at) VALUES (?, ?, ?) ON CONFLICT(session_id) DO UPDATE SET project_id=excluded.project_id, updated_at=excluded.updated_at`).run(sid, pid, now);
+    this.run(`INSERT INTO mcp_session_bindings(session_id, project_id, updated_at) VALUES (?, ?, ?) ON CONFLICT(session_id) DO UPDATE SET project_id=excluded.project_id, updated_at=excluded.updated_at`, [sid, pid, now]);
     this.events.emitProjectRegistryChanged();
   }
 
@@ -48,7 +50,7 @@ export class McpSessionBindingStore {
   public unbindMcpSession(sessionId: string): void {
     const sid = String(sessionId || "").trim();
     if (!sid) return;
-    this.db.prepare(`DELETE FROM mcp_session_bindings WHERE session_id = ?`).run(sid);
+    this.run(`DELETE FROM mcp_session_bindings WHERE session_id = ?`, [sid]);
     this.events.emitProjectRegistryChanged();
   }
 
@@ -58,7 +60,7 @@ export class McpSessionBindingStore {
   public resolveProjectIdByMcpSession(sessionId: string): string | null {
     const sid = String(sessionId || "").trim();
     if (!sid) return null;
-    const row = this.db.prepare(`SELECT project_id FROM mcp_session_bindings WHERE session_id = ? LIMIT 1`).get(sid) as any;
+    const row = this.queryOne<any>(`SELECT project_id FROM mcp_session_bindings WHERE session_id = ? LIMIT 1`, [sid]);
     return row ? row.project_id : null;
   }
 }

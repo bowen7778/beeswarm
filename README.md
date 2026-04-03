@@ -1,9 +1,9 @@
-# BeeSwarm Kernel
+# MCP Orchestrator Nebula
 
-基于 Model Context Protocol (MCP) 的工业级服务端核心。
+Advanced Model Context Protocol (MCP) Orchestration Server & Web Console.
 
 ## 架构规范
-- **主程序**：存放于 `src/`, `ui/`, `src-tauri/`。
+- **主程序**：存放于 `src/`, `ui/`。
 - **发布流程**：采用单仓双分支模型 (`main` -> `stable`)。
 - **热更新**：通过 GitHub Releases 自动化分发 `kernel.tar.gz`。
 

@@ -14,6 +14,7 @@ export const SYMBOLS = {
   // System
   SessionService: Symbol.for("SessionService"),
   WindowService: Symbol.for("WindowService"),
+  TrayService: Symbol.for("TrayService"),
   UIService: Symbol.for("UIService"),
   HttpServerService: Symbol.for("HttpServerService"),
   StaticAssetService: Symbol.for("StaticAssetService"),
@@ -43,7 +44,6 @@ export const SYMBOLS = {
 
   ConversationQueryService: Symbol.for("ConversationQueryService"),
   SessionApplicationService: Symbol.for("SessionApplicationService"),
-  HubSchemaInitializer: Symbol.for("HubSchemaInitializer"),
   ProjectStore: Symbol.for("ProjectStore"),
   McpSessionBindingStore: Symbol.for("McpSessionBindingStore"),
   ProjectModeStore: Symbol.for("ProjectModeStore"),

@@ -15,6 +15,7 @@ import { IMFacade } from "../../im/facade/IMFacade.js";
 import { MessageEvents, LogEntry } from "../../mcp/message/MessageEvents.js";
 import { SessionContext } from "../../../common/context/SessionContext.js";
 import { ProjectStore } from "../../mcp/stores/ProjectStore.js";
+import { VersionManager } from "../VersionManager.js";
 
 interface ProjectSnapshot {
   streamSeq: number;
@@ -38,7 +39,8 @@ export class StreamSnapshotService {
     @inject(SYMBOLS.MessageManagerStore) private readonly manager: MessageManagerStore,
     @inject(SYMBOLS.LoggerService) private readonly logger: LoggerService,
     @inject(SYMBOLS.MessageEvents) private readonly events: MessageEvents,
-    @inject(SYMBOLS.ProjectStore) private readonly projectStore: ProjectStore
+    @inject(SYMBOLS.ProjectStore) private readonly projectStore: ProjectStore,
+    @inject(SYMBOLS.VersionManager) private readonly versionManager: VersionManager
   ) {
     this.initEventListeners();
   }
@@ -137,7 +139,8 @@ export class StreamSnapshotService {
       }
     });
 
-    this.events.onUserInput((payload) => {
+    this.events.onUserInput(async (payload) => {
+      const appName = this.versionManager.appName;
       const root = this.resolveProjectRoot(payload.conversationId);
       if (root) {
         // Restore incremental event broadcast
@@ -145,6 +148,7 @@ export class StreamSnapshotService {
           type: "user_message",
           payload: {
             role: "user",
+            title: `${appName} Interaction`,
             content: payload.content,
             timestamp: payload.timestamp,
             id: payload.messageId,
@@ -409,7 +413,8 @@ export class StreamSnapshotService {
   markHeartbeat(setLastUIHeartbeat: (time: number) => void): void {
     const now = Date.now();
     setLastUIHeartbeat(now);
-    const lockFile = path.join(os.tmpdir(), "beemcp_ui_active.lock");
+    const appIdentifier = this.versionManager.appIdentifier;
+    const lockFile = path.join(os.tmpdir(), `${appIdentifier}_ui_active.lock`);
     try {
       fsSync.writeFileSync(lockFile, now.toString());
     } catch (err: any) {
@@ -422,7 +427,8 @@ export class StreamSnapshotService {
   }
 
   private uiLockAgeMs(): number | null {
-    const activeLock = path.join(os.tmpdir(), "beemcp_ui_active.lock");
+    const appIdentifier = this.versionManager.appIdentifier;
+    const activeLock = path.join(os.tmpdir(), `${appIdentifier}_ui_active.lock`);
     try {
       if (fsSync.existsSync(activeLock)) {
         return Date.now() - fsSync.statSync(activeLock).mtimeMs;

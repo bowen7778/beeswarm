@@ -5,6 +5,7 @@ import { SYMBOLS } from "../../../common/di/symbols.js";
 import { ConfigRepository } from "../../../platform/repositories/ConfigRepository.js";
 import { PathResolverService } from "../../runtime/PathResolverService.js";
 import { SecretService } from "../../runtime/SecretService.js";
+import { VersionManager } from "../../runtime/VersionManager.js";
 import { IMConfig, IMPluginConfig } from "../types/IMTypes.js";
 
 @injectable()
@@ -17,7 +18,8 @@ export class IMConfigService {
   constructor(
     @inject(SYMBOLS.ConfigRepository) private readonly configRepo: ConfigRepository,
     @inject(SYMBOLS.PathResolverService) private readonly pathResolver: PathResolverService,
-    @inject(SYMBOLS.SecretService) private readonly secret: SecretService
+    @inject(SYMBOLS.SecretService) private readonly secret: SecretService,
+    @inject(SYMBOLS.VersionManager) private readonly versionManager: VersionManager
   ) {}
 
   public async readConfig(): Promise<IMConfig> {
@@ -52,19 +54,27 @@ export class IMConfigService {
   public defaultPluginConfig(): IMPluginConfig {
     return {
       enabled: false,
-      credentials: {
-        appId: "",
-        appSecret: "",
-        botName: "BeeMCP",
-        userOpenId: "",
-        verificationToken: "",
-        signEncryptKey: ""
-      },
-      routingPolicy: {
-        autoCreateGroup: true,
-        connectionMode: "long_connection",
-        pollFallbackEnabled: false
-      }
+      masterBotId: "default",
+      instances: [
+        {
+          id: "default",
+          name: "Default Bot",
+          enabled: false,
+          credentials: {
+            appId: "",
+            appSecret: "",
+            botName: this.versionManager.appName,
+            userOpenId: "",
+            verificationToken: "",
+            signEncryptKey: ""
+          },
+          routingPolicy: {
+            autoCreateGroup: true,
+            connectionMode: "long_connection",
+            pollFallbackEnabled: false
+          }
+        }
+      ]
     };
   }
 
@@ -85,11 +95,11 @@ export class IMConfigService {
   }
 
   private getConfigPath(): string {
-    return path.join(this.pathResolver.configDir, "im.config.json");
+    return path.join(this.pathResolver.configDir, `${this.versionManager.appIdentifier}.im.config.json`);
   }
 
   private getBackupConfigPath(): string {
-    return path.join(this.pathResolver.configDir, "im.config.backup.json");
+    return path.join(this.pathResolver.configDir, `${this.versionManager.appIdentifier}.im.config.backup.json`);
   }
 
   private pickLegacyConfig(raw: any): any | null {
@@ -115,25 +125,33 @@ export class IMConfigService {
     const defaults = this.defaultPluginConfig();
     const rawCredentials = raw?.credentials || {};
     const rawRouting = raw?.routingPolicy || {};
-    const migratedPlugin: IMPluginConfig = this.normalizePluginConfig({
-      ...defaults,
+    
+    // Convert single bot to first instance
+    const legacyBot = {
+      id: "default",
+      name: "Default Bot",
       enabled: raw?.enabled != null ? !!raw.enabled : defaults.enabled,
       credentials: {
-        ...defaults.credentials,
-        ...rawCredentials,
-        appId: String(rawCredentials?.appId || raw?.appId || defaults.credentials.appId),
-        appSecret: String(rawCredentials?.appSecret || raw?.appSecret || defaults.credentials.appSecret),
-        botName: String(rawCredentials?.botName || raw?.botName || defaults.credentials.botName),
-        userOpenId: String(rawCredentials?.userOpenId || raw?.userOpenId || defaults.credentials.userOpenId),
-        verificationToken: String(rawCredentials?.verificationToken || raw?.verificationToken || defaults.credentials.verificationToken),
-        signEncryptKey: String(rawCredentials?.signEncryptKey || raw?.signEncryptKey || defaults.credentials.signEncryptKey)
+        appId: String(rawCredentials?.appId || raw?.appId || ""),
+        appSecret: String(rawCredentials?.appSecret || raw?.appSecret || ""),
+        botName: String(rawCredentials?.botName || raw?.botName || this.versionManager.appName),
+        userOpenId: String(rawCredentials?.userOpenId || raw?.userOpenId || ""),
+        verificationToken: String(rawCredentials?.verificationToken || raw?.verificationToken || ""),
+        signEncryptKey: String(rawCredentials?.signEncryptKey || raw?.signEncryptKey || "")
       },
       routingPolicy: {
-        ...defaults.routingPolicy,
-        ...rawRouting,
-        connectionMode: String(rawRouting?.connectionMode || raw?.connectionMode || defaults.routingPolicy.connectionMode)
+        autoCreateGroup: rawRouting?.autoCreateGroup != null ? !!rawRouting.autoCreateGroup : true,
+        connectionMode: String(rawRouting?.connectionMode || raw?.connectionMode || "long_connection"),
+        pollFallbackEnabled: !!rawRouting?.pollFallbackEnabled
       }
+    };
+
+    const migratedPlugin: IMPluginConfig = this.normalizePluginConfig({
+      enabled: legacyBot.enabled,
+      masterBotId: legacyBot.id,
+      instances: [legacyBot]
     });
+
     return {
       plugins: {
         [providerId]: migratedPlugin
@@ -157,6 +175,19 @@ export class IMConfigService {
 
   private toRuntimePluginConfig(raw: any): IMPluginConfig {
     const normalized = this.normalizePluginConfig(raw);
+    
+    // Decrypt secrets for all instances
+    if (normalized.instances) {
+      for (const instance of normalized.instances) {
+        if (instance.credentials) {
+          instance.credentials.appSecret = this.secret.decrypt(instance.credentials.appSecret || "");
+          instance.credentials.verificationToken = this.secret.decrypt(instance.credentials.verificationToken || "");
+          instance.credentials.signEncryptKey = this.secret.decrypt(instance.credentials.signEncryptKey || "");
+        }
+      }
+    }
+
+    // Decrypt legacy credentials if they exist
     if (normalized.credentials) {
       normalized.credentials.appSecret = this.secret.decrypt(normalized.credentials.appSecret || "");
       normalized.credentials.verificationToken = this.secret.decrypt(normalized.credentials.verificationToken || "");
@@ -171,15 +202,29 @@ export class IMConfigService {
       updatedAt: config.updatedAt || new Date().toISOString()
     };
     for (const [id, p] of Object.entries(config.plugins)) {
-      const credentials = p.credentials || {};
+      const instances = (p.instances || []).map(instance => {
+        const credentials = instance.credentials || {};
+        return {
+          ...instance,
+          credentials: {
+            ...credentials,
+            appSecret: this.secret.encrypt(credentials.appSecret || ""),
+            verificationToken: this.secret.encrypt(credentials.verificationToken || ""),
+            signEncryptKey: this.secret.encrypt(credentials.signEncryptKey || "")
+          }
+        };
+      });
+
+      const legacyCredentials = p.credentials || {};
       persisted.plugins[id] = {
         ...p,
-        credentials: {
-          ...credentials,
-          appSecret: this.secret.encrypt(credentials.appSecret || ""),
-          verificationToken: this.secret.encrypt(credentials.verificationToken || ""),
-          signEncryptKey: this.secret.encrypt(credentials.signEncryptKey || "")
-        }
+        instances,
+        credentials: p.credentials ? {
+          ...legacyCredentials,
+          appSecret: this.secret.encrypt(legacyCredentials.appSecret || ""),
+          verificationToken: this.secret.encrypt(legacyCredentials.verificationToken || ""),
+          signEncryptKey: this.secret.encrypt(legacyCredentials.signEncryptKey || "")
+        } : undefined
       };
     }
     return persisted;
@@ -187,11 +232,23 @@ export class IMConfigService {
 
   private normalizePluginConfig(raw: any): IMPluginConfig {
     const defaults = this.defaultPluginConfig();
-    return {
+    const instances = Array.isArray(raw?.instances) ? raw.instances : undefined;
+    
+    const normalized: IMPluginConfig = {
       ...defaults,
-      ...raw,
-      credentials: { ...defaults.credentials, ...raw?.credentials },
-      routingPolicy: { ...defaults.routingPolicy, ...raw?.routingPolicy }
+      ...raw
     };
+
+    if (instances) {
+      normalized.instances = instances.map((inst: any) => ({
+        ...inst,
+        credentials: { ...inst?.credentials },
+        routingPolicy: { ...inst?.routingPolicy }
+      }));
+    } else {
+      normalized.instances = defaults.instances;
+    }
+
+    return normalized;
   }
 }

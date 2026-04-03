@@ -27,9 +27,10 @@ export class SetupSSESessionUsecase {
   ) {}
 
   /**
-   * Execute the setup process for an SSE session.
+   * Execute the SSE session setup.
    */
-  public async execute(sessionId: string, transport: SSEServerTransport, projectRoot?: string): Promise<McpServer> {
+  public async execute(input: { sessionId: string; transport: SSEServerTransport; projectRoot?: string }): Promise<McpServer> {
+    const { sessionId, transport, projectRoot } = input;
     if (projectRoot) {
       await this.bindProject(sessionId, projectRoot);
     }
@@ -71,8 +72,9 @@ export class SetupSSESessionUsecase {
    */
   private createMcpServer(sessionId: string, projectRoot: string): { server: McpServer; context: SessionContextPayload } {
     const context: SessionContextPayload = { sessionId, projectRoot };
+    const appName = this.versionManager.appName;
     const server = new McpServer({
-      name: `BeeMCP-${sessionId.slice(0, 8)}`,
+      name: `${appName}-${sessionId.slice(0, 8)}`,
       version: this.versionManager.getProtocolVersion("mcpServer")
     }, {
       capabilities: { logging: {} },
@@ -88,9 +90,11 @@ export class SetupSSESessionUsecase {
    * Get custom instructions for the MCP server.
    */
   private getInstructions(): string {
-    return `BeeMCP Protocol ${this.versionManager.getProtocolVersion("beemcp")}
-You are working in a BeeMCP environment.
-Prioritize using beemcp_orchestrate and beemcp_ask for interactions.
+    const prefix = this.versionManager.protocolPrefix;
+    const appName = this.versionManager.appName;
+    return `${appName} Protocol ${this.versionManager.getProtocolVersion(prefix)}
+You are working in a ${appName} environment.
+Prioritize using ${prefix}_orchestrate and ${prefix}_ask for interactions.
 Please maintain a clear output structure and follow the current session context.`;
   }
 }

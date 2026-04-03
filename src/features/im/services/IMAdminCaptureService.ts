@@ -28,12 +28,16 @@ export class IMAdminCaptureService {
     const normalized = String(openId || "").trim();
     const capture = this.runtimeStore.getAdminCapture();
     const now = Date.now();
+    
+    process.stderr.write(`[IMAdminCapture] Attempting capture for ${normalized}. Active: ${capture.active}, Expires: ${capture.expiresAt}\n`);
+
     if (!capture.active) return;
     if (capture.expiresAt && new Date(capture.expiresAt).getTime() < now) {
       this.runtimeStore.touchAdminCapture({ active: false });
       return;
     }
     if (!normalized) return;
+    process.stderr.write(`[IMAdminCapture] SUCCESS! Captured OpenID: ${normalized}\n`);
     this.runtimeStore.touchAdminCapture({
       active: false,
       capturedAt: new Date(now).toISOString(),

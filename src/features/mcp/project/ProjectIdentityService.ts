@@ -9,6 +9,7 @@ import { SYMBOLS } from "../../../common/di/symbols.js";
 import { MessageEvents } from "../message/MessageEvents.js";
 import type { VersionManager } from "../../runtime/VersionManager.js";
 import { ProjectStore } from "../stores/ProjectStore.js";
+import { UnifiedEnv } from "../../../common/utils/UnifiedEnv.js";
 
 export type ProjectIdentity = {
   schemaVersion: number;
@@ -70,7 +71,7 @@ export class ProjectIdentityService {
   resolveWorkspaceRoot(workspaceHint?: string): string {
     const candidates = [
       workspaceHint || "",
-      process.env.BEEMCP_PROJECT_ROOT || ""
+      UnifiedEnv.get("PROJECT_ROOT") || ""
     ].map((x) => String(x || "").trim()).filter(Boolean);
     for (const c of candidates) {
       const normalized = this.normalize(c);

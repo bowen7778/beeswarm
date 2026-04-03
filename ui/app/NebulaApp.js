@@ -37,6 +37,7 @@ export class NebulaApp {
     this.dialogController = new NebulaDialogController(this);
     this.sessionController = new NebulaSessionController(this);
     this.configController = new NebulaConfigController(this);
+    this.identity = { appName: 'BeeSwarm', appIdentifier: 'beeswarm' };
     this.init();
   }
 
@@ -112,6 +113,12 @@ export class NebulaApp {
     this.requireElement(DOM_IDS.IM_BACK_TO_HUB).onclick = () => this.configController.switchImView('hub');
     this.requireElement(DOM_IDS.IM_FEISHU_SAVE).onclick = () => this.configController.saveFeishuConfig();
     this.requireElement(DOM_IDS.IM_FEISHU_BIND_ADMIN).onclick = () => this.configController.startAdminCapture();
+    
+    // Multi-bot events
+    this.requireElement(DOM_IDS.IM_FEISHU_ADD_BOT).onclick = () => this.configController.showBotEdit();
+    this.requireElement(DOM_IDS.IM_FEISHU_BOT_SAVE).onclick = () => this.configController.saveBot();
+    this.requireElement(DOM_IDS.IM_FEISHU_EDIT_CLOSE).onclick = () => this.configController.hideBotEdit();
+
     this.requireElement(DOM_IDS.IM_FEISHU_ENABLED_TOGGLE).onchange = (event) => {
       this.emitMonitor('info', `Feishu plugin ${event.target.checked ? 'enabling' : 'disabling'}...`, { domain: 'im', action: 'toggle' });
       this.configController.saveFeishuConfig(true);
@@ -136,6 +143,16 @@ export class NebulaApp {
   }
 
   async init() {
+    try {
+      const res = await fetch('./manifest.json');
+      const manifest = await res.json();
+      if (manifest.identity) {
+        this.identity = manifest.identity;
+      }
+    } catch (e) {
+      logger.error('Failed to fetch identity', e);
+    }
+
     i18n.subscribe(() => this.renderController.updateI18nUI());
     this.renderController.bindLangSwitch();
     this.renderController.updateI18nUI();

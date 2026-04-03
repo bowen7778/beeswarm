@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title data-i18n="app.title">BeeMCP Nebula | Orchestrator Control</title>
+  <title id="app-window-title">Loading...</title>
   
   <!-- External Icons (FontAwesome) - Handled as compliance exception for now or replaced if build fails -->
   <!-- Note: build-ui.mjs might fail if this is still here. Let's use standard icons if needed. -->
@@ -16,7 +16,7 @@
   <aside class="hub">
     <div class="hub-header">
       <div class="hub-brand">
-        <h1 class="hub-title" data-i18n="hub.title">NEBULA</h1>
+        <h1 class="hub-title" id="app-brand-name">LOADING</h1>
         <span class="hub-status-indicator"></span>
       </div>
       <div class="hub-actions">
@@ -234,12 +234,12 @@
             <div class="nebula-form-header">
               <div class="nebula-modal-label" data-i18n="modal.mcp.runtime.title">2. 激活并开始交互</div>
             </div>
-            <div class="code-block-wrapper">
-              <div class="code-block-header">
-                <span>AI Interaction Commands</span>
-              </div>
-              <pre class="code-block"><code>beemcp_init</code></pre>
-              <div class="code-block-desc" data-i18n="modal.mcp.runtime.init_desc">建立首次连接后，必须让 AI 执行此指令初始化上下文并同步回复</div>
+            <div class="code-block-header">
+                  <span id="header-icon-mcp-code"></span>
+                  <span>AI Interaction Commands</span>
+                </div>
+                <pre class="code-block"><code id="mcp-init-code-example">..._init</code></pre>
+                <div class="code-block-desc" data-i18n="modal.mcp.runtime.init_desc">建立首次连接后，必须让 AI 执行此指令初始化上下文并同步回复</div>
             </div>
           </div>
         </div>
@@ -293,6 +293,50 @@
             
             <div class="nebula-modal-section nebula-form-section">
               <div class="nebula-form-header">
+                <div class="nebula-modal-label" data-i18n="modal.im.feishu.instances_label">机器人实例集群</div>
+                <button class="nebula-btn-small btn-accent" id="im-feishu-add-bot">
+                  <span>+</span> <span data-i18n="modal.im.feishu.add_bot">添加机器人</span>
+                </button>
+              </div>
+              <div class="im-bot-list" id="im-feishu-bot-list">
+                <!-- Bot instances will be injected here -->
+              </div>
+            </div>
+
+            <!-- Bot Edit Form (Hidden by default) -->
+            <div id="im-feishu-bot-edit" class="nebula-modal-section nebula-form-section hidden">
+              <div class="nebula-form-header">
+                <div class="nebula-modal-label" id="im-feishu-edit-title">编辑机器人</div>
+                <button class="nebula-btn-small" id="im-feishu-edit-close">&times;</button>
+              </div>
+              <div class="nebula-form-grid">
+                <div class="nebula-form-item">
+                  <label>机器人名称</label>
+                  <input type="text" id="im-feishu-bot-name" class="nebula-form-input" placeholder="e.g. Project A Bot">
+                </div>
+                <div class="nebula-form-item">
+                  <label>App ID</label>
+                  <input type="text" id="im-feishu-bot-appid" class="nebula-form-input" placeholder="cli_...">
+                </div>
+                <div class="nebula-form-item">
+                  <label>App Secret</label>
+                  <input type="password" id="im-feishu-bot-secret" class="nebula-form-input" placeholder="******">
+                </div>
+                <div class="nebula-form-item hidden">
+                  <label>连接模式</label>
+                  <select id="im-feishu-bot-mode" class="nebula-form-input">
+                    <option value="long_connection" selected>长连接 (Long Connection)</option>
+                    <option value="webhook">Webhook</option>
+                  </select>
+                </div>
+              </div>
+              <div class="nebula-form-actions">
+                <button class="nebula-btn btn-accent" id="im-feishu-bot-save" data-i18n="modal.im.feishu.save">保存机器人</button>
+              </div>
+            </div>
+
+            <div class="nebula-modal-section nebula-form-section">
+              <div class="nebula-form-header">
                 <div class="nebula-modal-label" data-i18n="modal.im.feishu.status_label">运行状态</div>
                 <div class="switch-group">
                   <span class="switch-label" data-i18n="modal.im.feishu.enabled">启用插件</span>
@@ -304,8 +348,8 @@
               </div>
               <div class="im-status-card">
                 <div class="status-item">
-                  <span class="status-key" data-i18n="modal.im.feishu.connection">连接模式:</span>
-                  <span class="status-value" id="im-feishu-mode">---</span>
+                  <span class="status-key" data-i18n="modal.im.feishu.master_bot">主机器人:</span>
+                  <span class="status-value" id="im-feishu-master-bot-name">---</span>
                 </div>
                 <div class="status-item">
                   <span class="status-key" data-i18n="modal.im.feishu.inbound">累计接收:</span>
@@ -321,9 +365,10 @@
               </div>
             </div>
 
-            <div class="nebula-modal-section nebula-form-section">
+            <!-- Hidden Deprecated Section (Keep for DOM compatibility if needed, but hide) -->
+            <div class="nebula-modal-section nebula-form-section hidden" style="display: none !important;">
               <div class="nebula-form-header">
-                <div class="nebula-modal-label" data-i18n="modal.im.feishu.config_label">凭据配置</div>
+                <div class="nebula-modal-label" data-i18n="modal.im.feishu.config_label">凭据配置 (已弃用)</div>
               </div>
               <div class="nebula-form-grid">
                 <div class="nebula-form-item">
@@ -335,8 +380,9 @@
                   <input type="password" id="im-feishu-secret" class="nebula-form-input" placeholder="******">
                 </div>
               </div>
-              <button class="copy-btn" id="im-feishu-save" data-i18n="modal.im.feishu.save">保存并应用配置</button>
+              <button class="nebula-btn" id="im-feishu-save" data-i18n="modal.im.feishu.save">保存并应用配置</button>
             </div>
+          </div>
           </div>
         </div>
       </div>
@@ -403,5 +449,18 @@
     </div>
 
   <script type="module" src="./entry.js"></script>
+  <script>
+    // Identity dynamic hydration
+    fetch('./manifest.json')
+      .then(res => res.json())
+      .then(manifest => {
+        const id = manifest.identity || { appName: 'BeeSwarm', protocolPrefix: 'beeswarm' };
+        document.getElementById('app-window-title').innerText = `${id.appName} Nebula | Orchestrator Control`;
+        document.getElementById('app-brand-name').innerText = id.appName.toUpperCase();
+        const initCode = document.getElementById('mcp-init-code-example');
+        if (initCode) initCode.innerText = `${id.protocolPrefix}_init`;
+      })
+      .catch(console.error);
+  </script>
 </body>
 </html>

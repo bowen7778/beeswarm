@@ -110,27 +110,28 @@ export class MessageCoreService {
    * Process a decoded message received from an IM provider.
    */
   async ingestDecodedIMMessage(providerId: string, provider: IMProvider, result: any): Promise<{ queued: boolean; reason?: string; count: number }> {
+    this.logger.info("IM", `[${providerId}] ingestDecodedIMMessage called with: ${JSON.stringify(result)}`);
     if (!result || result.type !== "message" || !result.text) return { queued: false, reason: "not_message", count: 0 };
     
-    // 1. Get sender metadata
+    // 1. Get metadata including botId
     const senderType = String(result.senderType || "").toLowerCase();
     const senderOpenId = String(result.senderOpenId || "").trim();
     const senderAppId = String(result.senderAppId || "").trim();
+    const botId = String(result.botId || "").trim();
 
     // 2. Identity identification and filtering logic
     const inboundChatId = String(result.chatId || "");
     if (!inboundChatId) return { queued: false, reason: "missing_chat_id", count: 0 };
     
     // 3. Route resolution and context restoration
-    // Step 1: Scan all project configuration files (.beemcp) to find the matching chatId
     let resolvedProjectRoot: string | null = null;
     let conversationId: string | null = null;
 
     try {
-      const boundChatId = await this.imFacade.readBoundChatId(providerId);
-      if (boundChatId === inboundChatId) {
-        // 如果是 Hub 级别的全局绑定，需要根据会话路由进一步解析
-        conversationId = this.routing.resolveInboundConversationId(providerId, inboundChatId);
+      const bindingInfo = await this.imFacade.readBindingInfo(providerId);
+      if (bindingInfo.chatId === inboundChatId && (!botId || bindingInfo.botId === botId)) {
+        // Precise match for Hub-level binding
+        conversationId = this.routing.resolveInboundConversationId(providerId, inboundChatId, botId);
         if (conversationId) {
           const project = this.projectStore.readProjectById(conversationId);
           resolvedProjectRoot = project?.projectRoot || null;
@@ -143,46 +144,54 @@ export class MessageCoreService {
     
     // Step 2: Fallback to Hub memory if not found in physical config files
     if (!resolvedProjectRoot) {
-      conversationId = this.routing.resolveInboundConversationId(providerId, inboundChatId);
+      conversationId = this.routing.resolveInboundConversationId(providerId, inboundChatId, botId);
       if (conversationId) {
         const project = this.projectStore.readProjectById(conversationId);
         resolvedProjectRoot = project?.projectRoot || null;
       }
     }
     
-    this.logger.info("IM", `[${providerId}] Inbound message routing: chatId=${inboundChatId}, resolvedProjectRoot=${resolvedProjectRoot}`);
+    this.logger.info("IM", `[${providerId}:${botId || 'default'}] Inbound message routing: chatId=${inboundChatId}, resolvedProjectRoot=${resolvedProjectRoot}`);
     
-    // Core fix: Do NOT use current session context (SessionContext.projectRoot) as fallback.
-    // In a daemon process architecture, IM webhooks are sent to the master process.
-    // If no matching project is found, it should be dropped or sent to dead letter, 
-    // rather than leaking into whatever project happens to be active in the current thread.
+    // Critical: Admin capture must happen BEFORE project routing check.
+    if (senderOpenId) {
+      await this.imFacade.captureAdminOpenIdFromInbound(senderOpenId, providerId);
+    }
+
     if (!resolvedProjectRoot) {
-      this.logger.warn("IM", `[MessageCoreService] Dropped inbound message because no projectRoot could be resolved for chatId: ${inboundChatId}`);
+      this.logger.warn("IM", `[MessageCoreService] Dropped inbound message because no projectRoot could be resolved for chatId: ${inboundChatId} (Bot: ${botId})`);
       return { queued: false, reason: "project_not_found", count: 0 };
     }
 
     // If projectRoot is found but conversationId is not yet bound (e.g. new group)
     if (!conversationId) {
-      // Force get default ID within the project context
       await SessionContext.run({ projectRoot: resolvedProjectRoot }, async () => {
         conversationId = this.manager.getDefaultConversationId();
       });
       if (!conversationId) {
          conversationId = `${path.basename(resolvedProjectRoot)}-default-conv`;
       }
-      this.routing.bindConversationChatRoute(conversationId, providerId, inboundChatId);
+      this.routing.bindConversationChatRoute(conversationId, providerId, inboundChatId, botId);
     }
 
     return SessionContext.run({ projectRoot: resolvedProjectRoot }, async () => {
       const cfg = await this.imFacade.readConfig();
-      const myAppId = String(cfg.plugins[providerId]?.credentials?.appId || "").trim();
+      const plugin = cfg.plugins[providerId];
+      
+      // Find the specific instance appId for self-loop prevention
+      let myAppId = "";
+      if (botId && plugin?.instances) {
+        const instance = plugin.instances.find(i => i.id === botId);
+        myAppId = String(instance?.credentials?.appId || "").trim();
+      } else {
+        myAppId = String(plugin?.credentials?.appId || "").trim();
+      }
 
-      // Precision interception: ignore messages sent by the bot itself (via appId comparison)
-      // This is the first and most accurate line of defense against feedback loops.
+      // Precision interception: ignore messages sent by the bot itself
       const isSelfBot = senderAppId === myAppId;
       
-      if (isSelfBot) {
-        this.logger.info("IM", `[${providerId}] Ignored self-message from bot to prevent loop. AppId: ${senderAppId}`);
+      if (isSelfBot && myAppId) {
+        this.logger.info("IM", `[${providerId}] Ignored self-message from bot ${botId} to prevent loop. AppId: ${senderAppId}`);
         return { queued: false, reason: "self_bot_sender", count: 0 };
       } else if (senderType === "app") {
         this.logger.info("IM", `[${providerId}] Received message from third-party bot. AppId: ${senderAppId}`);
@@ -212,8 +221,6 @@ export class MessageCoreService {
         return { queued: false, reason: "duplicate_message_id", count: 0 };
       }
 
-      await this.imFacade.captureAdminOpenIdFromInbound(String(senderOpenId || ""), providerId);
-      
       const normalizedToken = this.manager.normalizeConversationId(conversationId || "");
       if (this.setActiveConversationToken && normalizedToken) this.setActiveConversationToken(normalizedToken);
       

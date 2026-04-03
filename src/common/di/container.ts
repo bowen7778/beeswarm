@@ -31,6 +31,7 @@ import { HarnessStore } from "../../features/harness/stores/HarnessStore.js";
 // Services
 import { SessionService } from "../../features/runtime/SessionService.js";
 import { WindowService } from "../../features/runtime/WindowService.js";
+import { TrayService } from "../../features/runtime/TrayService.js";
 import { UIService } from "../../features/runtime/UIService.js";
 import { HttpServerService } from "../../features/runtime/HttpServerService.js";
 import { StaticAssetService } from "../../features/runtime/StaticAssetService.js";
@@ -50,7 +51,6 @@ import { MessageEvents } from "../../features/mcp/message/MessageEvents.js";
 import { RoutingKernelService } from "../../features/mcp/message/RoutingKernelService.js";
 import { ConversationQueryService } from "../../features/mcp/session/ConversationQueryService.js";
 import { SessionApplicationService } from "../../features/mcp/session/SessionApplicationService.js";
-import { HubSchemaInitializer } from "../../features/mcp/session/HubSchemaInitializer.js";
 import { StreamSnapshotService } from "../../features/runtime/sse/StreamSnapshotService.js";
 import { MetricsService } from "../../features/metrics/MetricsService.js";
 import { ProjectContextService } from "../../features/mcp/project/ProjectContextService.js";
@@ -134,7 +134,7 @@ function buildContainer(): Container {
   container.bind<HarnessStore>(SYMBOLS.HarnessStore).to(HarnessStore).inSingletonScope();
 
   container.bind<SessionService>(SYMBOLS.SessionService).to(SessionService).inSingletonScope();
-  container.bind<WindowService>(SYMBOLS.WindowService).to(WindowService).inSingletonScope();
+  container.bind<TrayService>(SYMBOLS.TrayService).to(TrayService).inSingletonScope();
   container.bind<UIService>(SYMBOLS.UIService).to(UIService).inSingletonScope();
   container.bind<HttpServerService>(SYMBOLS.HttpServerService).to(HttpServerService).inSingletonScope();
   container.bind<StaticAssetService>(SYMBOLS.StaticAssetService).to(StaticAssetService).inSingletonScope();
@@ -154,7 +154,6 @@ function buildContainer(): Container {
   container.bind<RoutingKernelService>(SYMBOLS.RoutingKernelService).to(RoutingKernelService).inSingletonScope();
   container.bind<ConversationQueryService>(SYMBOLS.ConversationQueryService).to(ConversationQueryService).inSingletonScope();
   container.bind<SessionApplicationService>(SYMBOLS.SessionApplicationService).to(SessionApplicationService).inSingletonScope();
-  container.bind<HubSchemaInitializer>(SYMBOLS.HubSchemaInitializer).to(HubSchemaInitializer).inSingletonScope();
   container.bind<StreamSnapshotService>(SYMBOLS.StreamSnapshotService).to(StreamSnapshotService).inSingletonScope();
   container.bind<MetricsService>(SYMBOLS.MetricsService).to(MetricsService).inSingletonScope();
   container.bind<ProjectContextService>(SYMBOLS.ProjectContextService).to(ProjectContextService).inSingletonScope();
@@ -223,7 +222,6 @@ function initializeContainer(container: Container): Container {
 
   // 移除容器初始化阶段对 HubSchemaInitializer 的直接调用
   // 统一由 LifecycleManager 在数据库就绪后调用 MigrationService 维护 Schema
-  // container.get<HubSchemaInitializer>(SYMBOLS.HubSchemaInitializer).initialize();
   return container;
 }
 

@@ -6,6 +6,7 @@ import { PathResolverService } from "../../runtime/PathResolverService.js";
 import { LoggerService } from "../../runtime/LoggerService.js";
 import { ProjectContextService } from "../../mcp/project/ProjectContextService.js";
 import { ConfigRepository } from "../../../platform/repositories/ConfigRepository.js";
+import { VersionManager } from "../../runtime/VersionManager.js";
 
 @injectable()
 export class IMBindingService {
@@ -13,7 +14,8 @@ export class IMBindingService {
     @inject(SYMBOLS.ConfigRepository) private readonly configRepo: ConfigRepository,
     @inject(SYMBOLS.PathResolverService) private readonly pathResolver: PathResolverService,
     @inject(SYMBOLS.ProjectContextService) private readonly projectContext: ProjectContextService,
-    @inject(SYMBOLS.LoggerService) private readonly logger: LoggerService
+    @inject(SYMBOLS.LoggerService) private readonly logger: LoggerService,
+    @inject(SYMBOLS.VersionManager) private readonly versionManager: VersionManager
   ) {}
 
   public async readBoundChatId(providerId: string = "feishu", explicitRoot?: string): Promise<string> {
@@ -21,17 +23,29 @@ export class IMBindingService {
     return String(binding.chatId || "");
   }
 
-  public async bindChatId(chatId: string, providerId: string = "feishu", explicitRoot?: string): Promise<void> {
-    const normalized = String(chatId || "").trim();
-    if (!normalized) return;
-    const bPath = this.getBindingPath(providerId, explicitRoot);
+  public async readBindingInfo(providerId: string = "feishu", explicitRoot?: string): Promise<{ chatId?: string; botId?: string }> {
+    return await this.readBinding(providerId, explicitRoot);
+  }
+
+  public async bindChatId(input: {
+    chatId: string;
+    botId?: string;
+    providerId?: string;
+    explicitRoot?: string;
+  }): Promise<void> {
+    const providerId = input.providerId || "feishu";
+    const normalizedChatId = String(input.chatId || "").trim();
+    if (!normalizedChatId) return;
+    
+    const bPath = this.getBindingPath(providerId, input.explicitRoot);
     await fs.mkdir(path.dirname(bPath), { recursive: true });
     await this.configRepo.writeJson(bPath, {
       provider: providerId,
-      chatId: normalized,
+      chatId: normalizedChatId,
+      botId: input.botId || undefined,
       updatedAt: new Date().toISOString()
     });
-    this.logger.info("IM", `Bound chatId ${normalized} to project at ${bPath}`);
+    this.logger.info("IM", `Bound chatId ${normalizedChatId} (Bot: ${input.botId || 'default'}) to project at ${bPath}`);
   }
 
   public getBindingPath(providerId: string = "feishu", explicitRoot?: string): string {
@@ -51,7 +65,10 @@ export class IMBindingService {
       results[root] = {
         plugins: {
           [providerId]: {
-            routingPolicy: { boundChatId: chatId },
+            routingPolicy: { 
+              boundChatId: chatId,
+              botId: binding.botId
+            },
             credentials: {}
           }
         }
@@ -60,7 +77,7 @@ export class IMBindingService {
     return results;
   }
 
-  private async readBinding(providerId: string = "feishu", explicitRoot?: string): Promise<{ chatId?: string }> {
+  private async readBinding(providerId: string = "feishu", explicitRoot?: string): Promise<{ chatId?: string; botId?: string }> {
     try {
       const content = await fs.readFile(this.getBindingPath(providerId, explicitRoot), "utf-8");
       return JSON.parse(content);
@@ -78,14 +95,16 @@ export class IMBindingService {
     } catch {
       return output;
     }
+    const appIdentifier = this.versionManager.appIdentifier;
     for (const entry of entries) {
       if (!entry.isDirectory()) continue;
       const dir = path.join(root, entry.name);
-      if (entry.name === ".beemcp") {
-        output.push(path.dirname(dir));
+      // Ignore internal directories
+      if (entry.name === `.${appIdentifier}`) {
+        output.push(root);
         continue;
       }
-      if (entry.name.startsWith(".") && entry.name !== ".beemcp-runtime") continue;
+      if (entry.name.startsWith(".") && entry.name !== `.${appIdentifier}-runtime`) continue;
       const nested = await this.collectProjectRoots(dir, depth - 1);
       output.push(...nested);
     }

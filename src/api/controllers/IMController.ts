@@ -48,10 +48,101 @@ export class IMController extends BaseController {
     try {
       const providerId = String(req.query.provider || req.body?.provider || "feishu");
       await this.im.writeConfig(req.body || {}, providerId);
+      
+      // Trigger runtime reload
+      await this.imRuntimeOrchestrator.restartPlugin(providerId);
+      
       const saved = await this.im.readConfigPublic();
       this.sendOk(res, saved);
     } catch (err: any) {
       this.sendInternalError(res, err, "IM_CONFIG_SAVE_FAILED");
+    }
+  }
+
+  /**
+   * Add a new bot instance.
+   */
+  async addBotInstance(req: Request, res: Response) {
+    try {
+      const providerId = String(req.query.provider || "feishu");
+      const instance = req.body;
+      if (!instance || !instance.name) {
+        this.sendError(res, 400, "MISSING_PARAMS", "Missing instance name");
+        return;
+      }
+      const created = await this.im.addBotInstance(providerId, instance);
+      await this.imRuntimeOrchestrator.restartPlugin(providerId);
+      this.sendOk(res, created);
+    } catch (err: any) {
+      this.sendInternalError(res, err, "IM_BOT_ADD_FAILED");
+    }
+  }
+
+  /**
+   * Remove a bot instance.
+   */
+  async removeBotInstance(req: Request, res: Response) {
+    try {
+      const providerId = String(req.query.provider || "feishu");
+      const botId = String(req.params.botId || req.query.botId || req.body?.botId);
+      if (!botId) {
+        this.sendError(res, 400, "MISSING_BOT_ID", "Missing botId");
+        return;
+      }
+      const success = await this.im.removeBotInstance(providerId, botId);
+      if (success) {
+        await this.imRuntimeOrchestrator.restartPlugin(providerId);
+        this.sendOk(res, { success: true });
+      } else {
+        this.sendError(res, 404, "BOT_NOT_FOUND", "Bot instance not found");
+      }
+    } catch (err: any) {
+      this.sendInternalError(res, err, "IM_BOT_REMOVE_FAILED");
+    }
+  }
+
+  /**
+   * Update a bot instance.
+   */
+  async updateBotInstance(req: Request, res: Response) {
+    try {
+      const providerId = String(req.query.provider || "feishu");
+      const botId = String(req.params.botId || req.query.botId || req.body?.botId);
+      if (!botId) {
+        this.sendError(res, 400, "MISSING_BOT_ID", "Missing botId");
+        return;
+      }
+      const updated = await this.im.updateBotInstance(providerId, botId, req.body);
+      if (updated) {
+        await this.imRuntimeOrchestrator.restartPlugin(providerId);
+        this.sendOk(res, updated);
+      } else {
+        this.sendError(res, 404, "BOT_NOT_FOUND", "Bot instance not found");
+      }
+    } catch (err: any) {
+      this.sendInternalError(res, err, "IM_BOT_UPDATE_FAILED");
+    }
+  }
+
+  /**
+   * Set master bot.
+   */
+  async setMasterBot(req: Request, res: Response) {
+    try {
+      const providerId = String(req.query.provider || "feishu");
+      const botId = String(req.body?.botId);
+      if (!botId) {
+        this.sendError(res, 400, "MISSING_BOT_ID", "Missing botId");
+        return;
+      }
+      const success = await this.im.setMasterBot(providerId, botId);
+      if (success) {
+        this.sendOk(res, { success: true });
+      } else {
+        this.sendError(res, 404, "PROVIDER_NOT_FOUND", "Provider not found");
+      }
+    } catch (err: any) {
+      this.sendInternalError(res, err, "IM_SET_MASTER_FAILED");
     }
   }
 
@@ -224,10 +315,10 @@ export class IMController extends BaseController {
   /**
    * Get the status of admin OpenID capture.
    */
-  async getAdminCaptureStatus(req: Request, res: Response) {
+  public async getAdminCaptureStatus(req: Request, res: Response) {
     try {
       const projectRoot = this.resolveProjectRoot(req);
-      const status = await SessionContext.run({ projectRoot }, () => this.im.getAdminOpenIdCaptureStatus());
+      const status = await SessionContext.run({ projectRoot }, () => this.im.getAdminCaptureStatus());
       this.sendOk(res, status);
     } catch (err: any) {
       this.sendInternalError(res, err, "IM_ADMIN_CAPTURE_STATUS_FAILED");
@@ -253,10 +344,12 @@ export class IMController extends BaseController {
   async handleWebhook(req: Request, res: Response) {
     try {
       const providerId = String(req.params.providerId || req.query.provider || "feishu");
+      const botId = String(req.query.botId || ""); // Extract botId from query params
       const ret = await this.webhookIngress.ingest(providerId, {
         headers: req.headers as any,
         rawBody: (req as any).rawBody || "",
-        body: req.body || {}
+        body: req.body || {},
+        botId: botId || undefined
       });
       if (ret.statusCode >= 400) {
         this.sendError(

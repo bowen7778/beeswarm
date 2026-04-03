@@ -54,9 +54,10 @@ export class RoutingKernelService {
   /**
    * Resolve the outbound route for a conversation.
    */
-  resolveOutboundRoute(conversationId: string, providerId: string = "feishu", boundChatId: string = ""): {
+  resolveOutboundRoute(conversationId: string, providerId: string = "feishu", boundChatId: string = "", botId: string = ""): {
     code: "ok" | "missing_conversation" | "route_not_found";
     chatId: string;
+    botId: string;
     conversationId: string;
   } {
     const token = this.manager.normalizeConversationId(conversationId);
@@ -70,16 +71,20 @@ export class RoutingKernelService {
         chatId: "",
         autoBound: false
       });
-      return { code: "missing_conversation", chatId: "", conversationId: "" };
+      return { code: "missing_conversation", chatId: "", botId: "", conversationId: "" };
     }
     
     // Prioritize reading bound route from memory/database
-    const routed = String(this.manager.readConversation(token)?.routingConfig?.im?.[providerId]?.chatId || "").trim();
+    const imRouting = this.manager.readConversation(token)?.routingConfig?.im?.[providerId] || {};
+    const routedChatId = String(imRouting.chatId || "").trim();
+    const routedBotId = String(imRouting.botId || "").trim();
     
+    let chatId = routedChatId;
+    let finalBotId = routedBotId || botId;
+
     // Core fix: if not found in DB but boundChatId is provided, establish binding immediately
-    let chatId = routed;
     if (!chatId && boundChatId) {
-      this.bindConversationChatRoute(token, providerId, boundChatId);
+      this.bindConversationChatRoute(token, providerId, boundChatId, finalBotId);
       chatId = boundChatId;
     }
 
@@ -93,7 +98,7 @@ export class RoutingKernelService {
       chatId,
       autoBound: false
     });
-    return { code, chatId, conversationId: token };
+    return { code, chatId, botId: finalBotId, conversationId: token };
   }
 
   /**
@@ -104,29 +109,31 @@ export class RoutingKernelService {
   }
 
   /**
-   * Bind a conversation to a specific IM chat ID.
+   * Bind a conversation to a specific IM chat ID and Bot ID.
    */
-  bindConversationChatRoute(conversationId: string, providerId: string, chatId: string): void {
+  bindConversationChatRoute(conversationId: string, providerId: string, chatId: string, botId?: string): void {
     const token = this.manager.normalizeConversationId(conversationId);
     const normalizedChatId = String(chatId || "").trim();
     if (!token || !normalizedChatId) return;
     const currentRouting = this.manager.readConversation(token)?.routingConfig || {};
     const nextImRouting = {
       ...(currentRouting.im || {}),
-      [providerId]: { chatId: normalizedChatId }
+      [providerId]: { chatId: normalizedChatId, botId: botId || "default" }
     };
     this.manager.upsertConversationRouting(token, {
       ...currentRouting,
       im: nextImRouting,
       web: { channel: "web" }
     });
-    this.manager.upsertRoute(token, `${providerId}_chat_id`, normalizedChatId);
+    // Multi-bot channel key format: feishu:bot_id_chat_id
+    const channel = botId ? `${providerId}:${botId}_chat_id` : `${providerId}_chat_id`;
+    this.manager.upsertRoute(token, channel, normalizedChatId);
   }
 
   /**
    * Resolve the inbound route for a chat ID.
    */
-  resolveInboundRoute(providerId: string, inboundChatId: string, boundChatId: string = ""): {
+  resolveInboundRoute(providerId: string, inboundChatId: string, botId?: string): {
     code: "ok" | "missing_chat_id" | "route_not_found";
     conversationId: string;
     autoBound: boolean;
@@ -136,23 +143,21 @@ export class RoutingKernelService {
       return { code: "missing_chat_id", conversationId: "", autoBound: false };
     }
 
-    const channel = `${providerId}_chat_id`;
+    // Try multi-bot channel first, then fallback to legacy
+    const channels = [];
+    if (botId) channels.push(`${providerId}:${botId}_chat_id`);
+    channels.push(`${providerId}_chat_id`);
     
-    // We only query persistent routes when a clear context is available.
-    // This service doesn't pass projectRoot directly, so we catch potential context errors.
-    try {
-      const mapped = this.manager.findConversationIdByRoute(channel, chatId);
-      if (mapped) {
-        return { code: "ok", conversationId: mapped, autoBound: false };
+    for (const channel of channels) {
+      try {
+        const mapped = this.manager.findConversationIdByRoute(channel, chatId);
+        if (mapped) {
+          return { code: "ok", conversationId: mapped, autoBound: false };
+        }
+      } catch (e: any) {
+        if (e.message && e.message.includes("PROJECT_CONTEXT_REQUIRED")) continue;
+        this.logger.warn("RoutingKernelService", `Inbound resolve failed for ${channel}: ${e.message}`);
       }
-    } catch (e: any) {
-      if (e.message && e.message.includes("PROJECT_CONTEXT_REQUIRED")) {
-        // No current context means route cannot be found here; let upper layers handle fallback.
-        return { code: "route_not_found", conversationId: "", autoBound: false };
-      }
-      // Log other errors as warnings to avoid blocking the inbound flow.
-      this.logger.warn("RoutingKernelService", `Silent fail when resolving inbound route for chatId: ${chatId}. Reason: ${String(e?.message || e)}`);
-      return { code: "route_not_found", conversationId: "", autoBound: false };
     }
 
     return { code: "route_not_found", conversationId: "", autoBound: false };
